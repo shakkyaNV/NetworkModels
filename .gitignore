@@ -292,3 +292,4 @@ fabric.properties
 .png
 .jpeg
 media/
+**/__pycache__/
