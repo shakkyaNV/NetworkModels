@@ -282,10 +282,10 @@ crashlytics.properties
 crashlytics-build.properties
 fabric.properties
 
-## ------- Jupyter Notebook stuf
+## ------- Jupyter Notebook stuff
 **/.ipynb_checkpoints/
-.pytest_cache
-.virtual_documents
+.pytest_cache/
+.virtual_documents/
 .html
 .csv
 .pkl
