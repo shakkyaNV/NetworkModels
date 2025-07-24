@@ -294,3 +294,5 @@ fabric.properties
 .jpeg
 media/
 **/__pycache__/
+Project1/A1/__pycache__
+Project1/A1/lib
