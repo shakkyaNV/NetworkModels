@@ -6,23 +6,32 @@ from persim import plot_diagrams
 from collections import defaultdict
 
 
-def compute_persistence(graph: nx.Graph, activation_times, max_dim: int = 2):
+def compute_persistence(graph: nx.Graph,  activation_times, max_dim: int = 2, ngeom_edges_in_persistence:bool = False):
     """
     Compute the persistence homology given a networkx and a list of activation times.
     :param graph: nx.Graph
     :param activation_times: np.ndarray
     :param max_dim: Max Betti Number to compute
+    :param ngeom_edges_in_persistence: bool (default False) To whether include non-geometric edges in persistence calculations
     :return: Betti Numbers over filtration times: defaultdict(list), Simpleces persistence_intervals: list([dim][filtration][(birth) death)]
     """
 
-    def clean_inputs(graph, activation_times):
-        graph = nx.relabel_nodes(graph, lambda x: int(x))
+    def clean_inputs(graph, activation_times, ngeom_edges_in_persistence):
+
+        if ngeom_edges_in_persistence:
+            G = graph
+        else: ######### TEMPORARY, Change to use a distance threshold to see which are geom and ngeom
+            G = nx.Graph()
+            G.add_nodes_from(G.nodes(data = True))
+            G.add_edges_from([(u, v, d) for u, v, d in graph.edges(data=True) if d.get('type') == 'geometric'])
+
+        G = nx.relabel_nodes(G, lambda x: int(x))
         activation = np.array([int(x)
                                if not np.isnan(x) else np.nan
                                for x in activation_times], dtype='object')
-        return graph, activation
+        return G, activation
 
-    graph, activation = clean_inputs(graph, activation_times)
+    graph, activation = clean_inputs(graph, activation_times, ngeom_edges_in_persistence)
     betti_over_time = {}
     simplex_intervals = defaultdict(list)
 
@@ -44,14 +53,14 @@ def compute_persistence(graph: nx.Graph, activation_times, max_dim: int = 2):
                 edge_filtration = max(activation[u], activation[v])
                 tree.insert([u, v], filtration=edge_filtration)
 
-        tree.compute_persistence(min_persistence=0, persistence_dim_max=2)
+        tree.compute_persistence(min_persistence=0, persistence_dim_max=max_dim)
 
         # Using intervals to calculate persistent homology, because we need intervals
         # for barcode graphs anyway.
         # Otherwise, tree.persistent_pairs(), or tree.betti_numebers() would
         # be very easy
         temp_betti = {}
-        for dim in range(3):
+        for dim in range(max_dim + 1):
             intervals = tree.persistence_intervals_in_dimension(dim)
             intervals = intervals.astype(object)
             print(f"Dimension: {dim} \n intervals: {intervals} \n ~~~~~~~~~~~~~")
@@ -76,7 +85,7 @@ def betti_nums_over_time(betti_over_time: dict):
 
     plt.xlabel("Time Stesp")
     plt.ylabel("Feature Counts")
-    plt.title("Betti Couts")
+    plt.title("Betti Counts")
     plt.legend()
     plt.grid(True)
     plt.show()

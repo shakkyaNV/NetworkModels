@@ -43,12 +43,12 @@ def generate_graph(num_nodes: int, num_neighbor_nodes:int, total_random_edges: i
     if weighted:
         for node in range(num_nodes):
             for i in range(num_neighbor_nodes):
-                graph.add_edge(node, (node + i + 1) % num_nodes, label = 'geometric',
+                graph.add_edge(node, (node + i + 1) % num_nodes, type = 'geometric',
                                weight = add_skewed_weights(1, upper_weight_limit, skew_power)[0])
     else:
         for node in range(num_nodes):
             for i in range(num_neighbor_nodes):
-                graph.add_edge(node, (node + i + 1) % num_nodes, label = 'geometric')
+                graph.add_edge(node, (node + i + 1) % num_nodes, type = 'geometric')
 
     graph = add_non_geometric_edges(graph=graph, total_random_edges=total_random_edges,
                                     distance_threshold=distance_threshold,
