@@ -22,7 +22,7 @@ def compute_persistence(graph: nx.Graph,  activation_times, max_dim: int = 2, ng
             G = graph
         else: ######### TEMPORARY, Change to use a distance threshold to see which are geom and ngeom
             G = nx.Graph()
-            G.add_nodes_from(G.nodes(data = True))
+            G.add_nodes_from(graph.nodes(data = True))
             G.add_edges_from([(u, v, d) for u, v, d in graph.edges(data=True) if d.get('type') == 'geometric'])
 
         G = nx.relabel_nodes(G, lambda x: int(x))
@@ -32,11 +32,12 @@ def compute_persistence(graph: nx.Graph,  activation_times, max_dim: int = 2, ng
         return G, activation
 
     graph, activation = clean_inputs(graph, activation_times, ngeom_edges_in_persistence)
+
     betti_over_time = {}
     simplex_intervals = defaultdict(list)
 
     for t in range(np.nanmax(activation) + 1):
-        print(f"---------- Filtration Time Step: {t} ------------")
+        # print(f"---------- Filtration Time Step: {t} ------------")
         tree = gd.SimplexTree()
         tree.make_filtration_non_decreasing()
         # tree.initialize_filtration()
@@ -46,6 +47,7 @@ def compute_persistence(graph: nx.Graph,  activation_times, max_dim: int = 2, ng
         # Create a subgraph at time = t,
         # Add all current nodes and edges
         subg = graph.subgraph(active_nodes).copy()
+
         for node in subg.nodes():
             tree.insert([node], filtration=t)
         for u, v, labels in subg.edges(data = True):
@@ -63,14 +65,14 @@ def compute_persistence(graph: nx.Graph,  activation_times, max_dim: int = 2, ng
         for dim in range(max_dim + 1):
             intervals = tree.persistence_intervals_in_dimension(dim)
             intervals = intervals.astype(object)
-            print(f"Dimension: {dim} \n intervals: {intervals} \n ~~~~~~~~~~~~~")
+            # print(f"Dimension: {dim} \n intervals: {intervals} \n ~~~~~~~~~~~~~")
             b = sum(1 for birth, death in intervals if birth <= t < death)
             temp_betti[dim] = b
             simplex_intervals[dim].append((t, [tuple(pair) for pair in intervals]))
             betti_over_time[t] = temp_betti
 
         # print(f"Betti numebrs by tree.betti_numbers[t]: {tree.betti_numbers()}")
-        print(f" Betti Numbers: {temp_betti}")
+        # print(f" Betti Numbers: {temp_betti}")
 
     return betti_over_time, simplex_intervals
 

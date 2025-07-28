@@ -6,6 +6,7 @@ import numpy as np
 import pandas as pd
 
 from utilsA1 import snapshots_to_activation_times_series
+import gudhi_persistence as gp
 
 PATH = os.path.dirname(__file__)
 
@@ -48,7 +49,7 @@ def generate_graph(num_nodes: int, num_neighbor_nodes:int, total_random_edges: i
     else:
         for node in range(num_nodes):
             for i in range(num_neighbor_nodes):
-                graph.add_edge(node, (node + i + 1) % num_nodes, type = 'geometric')
+                graph.add_edge(node, (node + i + 1) % num_nodes, type = 'geometric', weight = 0)
 
     graph = add_non_geometric_edges(graph=graph, total_random_edges=total_random_edges,
                                     distance_threshold=distance_threshold,
@@ -206,7 +207,7 @@ def add_skewed_weights(n: int = 1, upper_weight_limit: int = 10, skew_power: int
     return np.round((np.random.rand(n) ** skew_power) * (upper_weight_limit + 1)).astype(int)
 
 
-def simulation_record_data(params:dict, threshold_sum: int, max_steps:int = 100, sim_id:int = 1):
+def simulation_record_data(params:dict, max_steps:int = 100, sim_id:int = 1):
 
     G = generate_graph(
         params.get('num_nodes', 100),
@@ -233,20 +234,31 @@ def simulation_record_data(params:dict, threshold_sum: int, max_steps:int = 100,
                                                                              weighted=params.get('weighted', False))
     activation_series = snapshots_to_activation_times_series(snapshots, params.get('num_nodes'))
 
+    max_persistence_dim = int(params.get('max_persistence_dim', 2))
+    ngeom_edges_in_persistence = params.get('geom_edges_in_persistence', False)
+
+    # Compute Persistence Homology
+    betti_numbers, _ = gp.compute_persistence(graph=G, activation_times=activation_times,
+                                              max_dim=max_persistence_dim,
+                                              ngeom_edges_in_persistence=ngeom_edges_in_persistence)
+
     results = []
     for t, active_nodes_time_t in enumerate(activation_series):
         activated_nodes = np.where(~np.isnan(active_nodes_time_t))[0]
-        state = state_function(activated_nodes, threshold_sum)
+        state = state_function(activated_nodes, params.get('threshold_sum', 19900))
 
         features_dict = {
             'simulation_id': sim_id,
             'num_nodes': params.get('num_nodes', 100),
             'time': t,
             'state': state,
-            'state_abnormal_sum': threshold_sum,
+            'state_abnormal_sum': params.get('threshold_sum', 0),
             'num_active_nodes': len(activated_nodes),
             'active_nodes': active_nodes_time_t,
             'node_active_threshold': params.get('node_active_threshold', 0.1),
+            'H0': betti_numbers[t][0],
+            'H1': betti_numbers[t][1],
+            'H2': betti_numbers[t][2],
             'num_non_geo_edges': params.get('total_random_edges'),
             'num_seeds': params.get('n_seeds', 1),
             'seed_nodes': init_seeds,
@@ -262,7 +274,7 @@ def simulation_record_data(params:dict, threshold_sum: int, max_steps:int = 100,
     return G, snapshots, activation_times, results
 
 
-def main_sims(params_list:dict , threshold_sum: int,
+def main_sims(params_list:dict ,
               max_steps=100, output_file='simulation_results.csv', save_files=False):
     """
     :param params_list: list of dicts with parameters for each run,
@@ -278,8 +290,7 @@ def main_sims(params_list:dict , threshold_sum: int,
     activation_times_results = [] # for brad
     for i, params in enumerate(params_list):
         # print(f"Running simulation {i + 1} with params: {params}")
-        G, _, activation_times, results = simulation_record_data(params=params, sim_id = i,
-                                                                 threshold_sum=threshold_sum, max_steps=max_steps)
+        G, _, activation_times, results = simulation_record_data(params=params, sim_id = i, max_steps=max_steps)
         activation_times_results.append({'sim_id': i,
                                         'graph': G,
                                         'activation_times': activation_times})
@@ -290,15 +301,15 @@ def main_sims(params_list:dict , threshold_sum: int,
     if save_files:
         df = pd.DataFrame(simulation_results)
         df_file_path = os.path.normpath(os.path.join(outfile_path, f"{output_file}.csv"))
-        pickle_file_path = os.path.normpath(os.path.join(outfile_path, f"{output_file}.pkl"))
+        # pickle_file_path = os.path.normpath(os.path.join(outfile_path, f"{output_file}.pkl"))
 
         df.to_csv(df_file_path, index=False)
         print(f"Simulation results saved to {df_file_path}")
 
-        with open(pickle_file_path, "wb") as f:
-            pickle.dump(activation_times_results, f)
+        # with open(pickle_file_path, "wb") as f:
+        #     pickle.dump(activation_times_results, f)
 
-        return df_file_path, pickle_file_path
+        return df_file_path, 0 #, pickle_file_path
     else:
         return df, activation_times_results
 

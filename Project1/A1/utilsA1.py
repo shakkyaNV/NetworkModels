@@ -175,6 +175,7 @@ def generate_random_params(num_samples=200):
     params_list = []
 
     for _ in range(num_samples):
+        num_nodes = random.randint(100, 200)
         weighted = random.choice([True, False])
         n_seeds = random.choices([1, 2, 3, 4])[0] #, weights=[0.1, 0.4, 0.4, 0.1])[0]
         node_active_threshold =  random.choices(np.round(np.arange(0.03, 0.2, 0.01), 3))[0] #if weighted else round(random.choice(np.arange(0.10, 0.20, 0.01)), 3)
@@ -184,9 +185,12 @@ def generate_random_params(num_samples=200):
         upper_weight_limit = random.randint(10, 30)  # if node_active_threshold > 0.1 else random.randint(20, 40)
         skew_power =  random.randint(2, 4)
         seed_cluster_distance = random.randint(n_seeds + 1, 30)
+        ngeom_edges_in_persistence = False
+        max_persistence_dim = 2
+        threshold_sum = sum(range(num_nodes)) - 1
 
         param = {
-            'num_nodes': 200,  # fixed
+            'num_nodes': num_nodes,  # fixed
             'num_neighbor_nodes': num_neighbor_nodes,
             'total_random_edges': total_random_edges,
             'distance_threshold': distance_threshold,
@@ -197,6 +201,9 @@ def generate_random_params(num_samples=200):
             'upper_weight_limit': upper_weight_limit,
             'skew_power': skew_power,
             'seed_cluster_distance': seed_cluster_distance,
+            'ngeom_edges_in_persistence': ngeom_edges_in_persistence,
+            'max_persistence_dim': max_persistence_dim,
+            'threshold_sum': threshold_sum
         }
 
         params_list.append(param)
