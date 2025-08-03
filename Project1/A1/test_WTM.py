@@ -122,10 +122,10 @@ def add_non_geometric_edges(graph: nx.Graph, total_random_edges: int, distance_t
         ngeo_per_node = num_random_edges
         num_nodes = graph.number_of_nodes()
 
-        weights = np.zeros(ngeo_per_node)
+        weights = np.zeros(ngeo_per_node * num_nodes // 2)
 
         if weighted:
-            weights = add_skewed_weights(n = ngeo_per_node * num_nodes // 2,
+            weights = add_skewed_weights(n = (ngeo_per_node * num_nodes ) // 2,
                                          upper_weight_limit = upper_weight_limit, skew_power=skew_power)
             np.random.shuffle(weights)
 
@@ -229,8 +229,7 @@ def state_function(active_nodes, threshold_sum):
 
 
 def get_seed_nodes_combinations(graph: nx.graph, n_seeds: int = 2):
-    num_nodes = graph.number_of_nodes()
-    return list(itertools.combinations(num_nodes, n_seeds))
+    return list(itertools.combinations(graph.nodes, n_seeds))
 
 def initial_seed_nodes(graph: nx.graph, n_seeds:int=2, seed_cluster_distance: int = 10, init_seeds = ()) -> tuple:
     if init_seeds is not None:
@@ -257,7 +256,6 @@ def add_skewed_weights(n: int = 1, upper_weight_limit: int = 10, skew_power: int
 
 
 def simulate_contagion_map(params:dict):
-
     graph = generate_graph(
         params.get('num_nodes', 100),
         params.get('num_neighbor_nodes', 3),
@@ -282,10 +280,13 @@ def simulate_contagion_map(params:dict):
 
 
 def simulate_contagion_realization(graph: nx.graph, init_seeds: tuple, params:dict,
-                                   max_steps:int = 100, sim_id:int = 1, realization_id: int = 1):
+                                   max_steps:int = 100, sim_id:int = 1, realization_id:int = 1):
 
     weights = [d.get('weight', 0) for _, _, d in graph.edges(data=True)]
     average_weight = np.mean(weights) if weights else 0
+    total_geo_edges = sum([1 for _, _, d in graph.edges(data=True) if d.get('type') == 'geometric'])
+    total_non_geo_edges = sum([1 for _, _, d in graph.edges(data=True) if d.get('type') == 'non-geometric'])
+
     if params.get('seeding_method') == 'cluster_seeding':
         assert len(init_seeds) == params.get('n_seeds', 2)
 
@@ -323,7 +324,8 @@ def simulate_contagion_realization(graph: nx.graph, init_seeds: tuple, params:di
             'H0': betti_numbers[t][0],
             'H1': betti_numbers[t][1],
             'H2': betti_numbers[t][2],
-            'num_non_geo_edges': params.get('total_random_edges'),
+            'total_geo_edges': total_geo_edges,
+            'total_non_geo_edges': total_non_geo_edges,
             'num_seeds': params.get('n_seeds', 1),
             'seed_nodes': init_seeds,
             'seed_cluster_distance': params.get('seed_cluster_distance', 10),
@@ -337,7 +339,7 @@ def simulate_contagion_realization(graph: nx.graph, init_seeds: tuple, params:di
 
     return graph, snapshots, activation_times, results
 
-def main_sims(params_list:dict ,
+def main_sims(params_list:list ,
               max_steps=100, output_file='simulation_results.csv', save_files=False):
     """
     :param params_list: list of dicts with parameters for each run,
@@ -355,7 +357,11 @@ def main_sims(params_list:dict ,
         graph, seed_node_combinations = simulate_contagion_map(params = params)
         activation_times_results.append({'sim_id': i, 'graph': graph, 'realization_id': 0, })
         for j, seed_nodes in enumerate(seed_node_combinations):
-            G, _, activation_times, results = simulate_contagion_realization(params=params, sim_id = i, max_steps=max_steps)
+            G, _, activation_times, results = simulate_contagion_realization(graph = graph,
+                                                                             init_seeds = seed_nodes,
+                                                                             params=params, sim_id = i,
+                                                                             max_steps=max_steps,
+                                                                             realization_id=j)
             activation_times_results.append({'sim_id': i,
                                             'realization_id': j,
                                             'activation_times': activation_times})
@@ -377,15 +383,3 @@ def main_sims(params_list:dict ,
         return df_file_path, 0 #, pickle_file_path
     else:
         return df, activation_times_results
-
-####################---- TEST Visualization---############
-# G = generate_graph(100, 3, 50, 4, True, 'random.choice')
-# init_seeds = initial_seed_nodes(G, n_seeds = 1, init_seeds = None)
-# active_nodes, activation_times, propagation_snapshots = contagion_propagation(graph = G, init_seeds = init_seeds, node_active_threshold = 0.000001,
-#                                         max_steps = 100, weighted = False)
-#
-# H = nx.Graph()
-# H.add_nodes_from(G.nodes())
-# print(G.edges())
-# breakpoint()
-# visualize_step_animation(G, three, 'networkx_contagion.html')
