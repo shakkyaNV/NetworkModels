@@ -1,5 +1,8 @@
+import collections
+import itertools
 import os
 import pickle
+import random
 
 import networkx as nx
 import numpy as np
@@ -13,7 +16,7 @@ PATH = os.path.dirname(__file__)
 def generate_graph(num_nodes: int, num_neighbor_nodes:int, total_random_edges: int,
                    distance_threshold: int,
                    upper_weight_limit: int = 10, skew_power: int = 3,
-                   weighted=False, random_dist='random.choice') -> nx.Graph:
+                   weighted=False, ngeo_placement='random.choice') -> nx.Graph:
     """
 
     Generate Ring Graph with geometric and non_geometric edges
@@ -24,7 +27,7 @@ def generate_graph(num_nodes: int, num_neighbor_nodes:int, total_random_edges: i
     :param upper_weight_limit: maximum weight allowed for non-geometric edges
     :param skew_power: How much weights are skewed towards zero
     :param weighted: if Weighted graph or Not
-    :param random_dist: Probability distribution for weights
+    :param ngeo_placement: Probability distribution for weights
     :return: Networkx Graph
     """
     if not distance_threshold:
@@ -55,14 +58,14 @@ def generate_graph(num_nodes: int, num_neighbor_nodes:int, total_random_edges: i
                                     distance_threshold=distance_threshold,
                                     upper_weight_limit=upper_weight_limit,
                                     skew_power=skew_power,
-                                    random_dist=random_dist,
+                                    ngeo_placement=ngeo_placement,
                                     weighted=weighted)
     return graph
 
 
 def add_non_geometric_edges(graph: nx.Graph, total_random_edges: int, distance_threshold: int,
                             upper_weight_limit: int = 10, skew_power: int = 3,
-                            random_dist="random.choice", weighted: bool = False) -> nx.Graph:
+                            ngeo_placement="random.choice", weighted: bool = False) -> nx.Graph:
     """
     Create non-geometric edges accoring to a given distance
     (Not a L2/L1 measure, Based on number of neighbors in Ring) threshold
@@ -71,7 +74,7 @@ def add_non_geometric_edges(graph: nx.Graph, total_random_edges: int, distance_t
     :param distance_threshold: # of neighbouring to skip as an early distance measure
     :param upper_weight_limit: maximum weight allowed for non-geometric edges
     :param skew_power: How much weights are skewed towards zero
-    :param random_dist: choice of how to create non-geometric edges. "random.choice": randomly choosing from a pool of all possible edges
+    :param ngeo_placement: choice of how to create non-geometric edges. "random.choice": randomly choosing from a pool of all possible edges
     :param weighted: whether edges should be weighted or not. Default = False
     :return: networkx graph
     """
@@ -84,7 +87,7 @@ def add_non_geometric_edges(graph: nx.Graph, total_random_edges: int, distance_t
     else:
         num_random_edges = num_geometric_edges/2
 
-    if random_dist == "random.choice":
+    if ngeo_placement == "random.choice":
         src, tgt = np.meshgrid(graph.nodes(), graph.nodes())
         src = src.flatten()
         tgt = tgt.flatten()
@@ -109,6 +112,46 @@ def add_non_geometric_edges(graph: nx.Graph, total_random_edges: int, distance_t
             return graph
         else:
             graph.add_edges_from(non_geometric_edges, type = 'non-geometric', weight = 0)
+        return graph
+
+    elif ngeo_placement == 'ngeo_per_node':
+        ngeo_per_node = num_random_edges
+        num_nodes = graph.number_of_nodes()
+        def ring_distance(u, v, n):
+            return min(abs(u - v), n - abs(u - v))
+
+        weights = np.zeros(ngeo_per_node)
+
+        if weighted:
+            weights = add_skewed_weights(n = ngeo_per_node * num_nodes // 2,
+                                         upper_weight_limit = upper_weight_limit, skew_power=skew_power)
+            np.random.shuffle(weights)
+
+        candidate_pairs = [(u, v) for u in graph.nodes() for v in graph.nodes()
+                        if  ring_distance(u, v, num_nodes) >= distance_threshold
+                        and u < v
+                        and not graph.has_edge(u, v)]
+        random.shuffle(candidate_pairs)
+
+        non_geo_edges = list()
+        ngeo_edge_counts = collections.defaultdict(int)
+
+        for u, v in candidate_pairs:
+            if ngeo_edge_counts[u] < ngeo_per_node and ngeo_edge_counts[v] < ngeo_per_node:
+                non_geo_edges.append((u, v))
+                ngeo_edge_counts[u] += 1
+                ngeo_edge_counts[v] += 1
+
+            if len(non_geo_edges) == (ngeo_per_node * num_nodes // 2):
+                break
+
+        requirement_ngeo = [node for node in graph.nodes() if ngeo_edge_counts[node] < ngeo_per_node]
+        if requirement_ngeo:
+            print(non_geo_edges)
+            print(f"Warning: {len(requirement_ngeo)} nodes could not reach Number of non-geo={ngeo_per_node} edges due to constraints")
+
+        weighted_edges = [(u, v, w) for (u, v), w in zip(non_geo_edges, weights)]
+        graph.add_weighted_edges_from(weighted_edges, type = 'non-geometric')
         return graph
 
 
@@ -182,7 +225,6 @@ def contagion_propagation(graph: nx.Graph, init_seeds: tuple, node_active_thresh
 def state_function(active_nodes, threshold_sum):
     return int(sum(set(active_nodes)) >= threshold_sum)
 
-
 def initial_seed_nodes(graph: nx.graph, n_seeds:int=2, seed_cluster_distance: int = 10, init_seeds = ()) -> tuple:
     if init_seeds is not None:
         if len(init_seeds) > 0:
@@ -207,7 +249,7 @@ def add_skewed_weights(n: int = 1, upper_weight_limit: int = 10, skew_power: int
     return np.round((np.random.rand(n) ** skew_power) * (upper_weight_limit + 1)).astype(int)
 
 
-def simulation_record_data(params:dict, max_steps:int = 100, sim_id:int = 1):
+def simulate_contagion(params:dict, max_steps:int = 100, sim_id:int = 1):
 
     G = generate_graph(
         params.get('num_nodes', 100),
@@ -217,7 +259,7 @@ def simulation_record_data(params:dict, max_steps:int = 100, sim_id:int = 1):
         params.get('upper_weight_limit', 10),
         params.get('skew_power', 3),
         params.get('weighted', True),
-        params.get('random_dist', 'random.choice'))
+        params.get('ngeo_placement', 'random.choice'))
 
     weights = [d.get('weight', 0) for _, _, d in G.edges(data=True)]
     average_weight = np.mean(weights) if weights else 0
@@ -273,7 +315,6 @@ def simulation_record_data(params:dict, max_steps:int = 100, sim_id:int = 1):
 
     return G, snapshots, activation_times, results
 
-
 def main_sims(params_list:dict ,
               max_steps=100, output_file='simulation_results.csv', save_files=False):
     """
@@ -290,7 +331,7 @@ def main_sims(params_list:dict ,
     activation_times_results = [] # for brad
     for i, params in enumerate(params_list):
         # print(f"Running simulation {i + 1} with params: {params}")
-        G, _, activation_times, results = simulation_record_data(params=params, sim_id = i, max_steps=max_steps)
+        G, _, activation_times, results = simulate_contagion(params=params, sim_id = i, max_steps=max_steps)
         activation_times_results.append({'sim_id': i,
                                         'graph': G,
                                         'activation_times': activation_times})
