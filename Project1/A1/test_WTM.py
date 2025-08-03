@@ -87,6 +87,9 @@ def add_non_geometric_edges(graph: nx.Graph, total_random_edges: int, distance_t
     else:
         num_random_edges = num_geometric_edges/2
 
+    def ring_distance(u, v, n):
+        return min(abs(u - v), n - abs(u - v))
+
     if ngeo_placement == "random.choice":
         src, tgt = np.meshgrid(graph.nodes(), graph.nodes())
         src = src.flatten()
@@ -96,7 +99,8 @@ def add_non_geometric_edges(graph: nx.Graph, total_random_edges: int, distance_t
         src = src[directed_mask]
         tgt = tgt[directed_mask]
 
-        distance_mask = np.abs(src - tgt) >= distance_threshold
+        ring_dist = np.minimum(np.abs(src -tgt), graph.number_of_nodes() - np.abs(src - tgt))
+        distance_mask = ring_dist >= distance_threshold
         src = src[distance_mask]
         tgt = tgt[distance_mask]
         valid_edge_list = np.stack((src, tgt), axis=1)
@@ -117,8 +121,6 @@ def add_non_geometric_edges(graph: nx.Graph, total_random_edges: int, distance_t
     elif ngeo_placement == 'ngeo_per_node':
         ngeo_per_node = num_random_edges
         num_nodes = graph.number_of_nodes()
-        def ring_distance(u, v, n):
-            return min(abs(u - v), n - abs(u - v))
 
         weights = np.zeros(ngeo_per_node)
 
@@ -285,7 +287,7 @@ def simulate_contagion_realization(graph: nx.graph, init_seeds: tuple, params:di
     weights = [d.get('weight', 0) for _, _, d in graph.edges(data=True)]
     average_weight = np.mean(weights) if weights else 0
     if params.get('seeding_method') == 'cluster_seeding':
-        init_seeds = init_seeds[0]
+        assert len(init_seeds) == params.get('n_seeds', 2)
 
     # Run contagion propagation
     active_nodes_at_end, activation_times, snapshots = contagion_propagation(graph=graph, init_seeds=init_seeds,
