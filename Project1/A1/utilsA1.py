@@ -188,6 +188,8 @@ def generate_random_params(num_samples=200):
         ngeom_edges_in_persistence = False
         max_persistence_dim = 2
         threshold_sum = sum(range(num_nodes)) - 1
+        seeding_method = 'all_combinations'
+        ngeo_placement = 'ngeo_per_node'
 
         param = {
             'num_nodes': num_nodes,  # fixed
@@ -195,7 +197,7 @@ def generate_random_params(num_samples=200):
             'total_random_edges': total_random_edges,
             'distance_threshold': distance_threshold,
             'weighted': weighted,
-            'random_dist': 'random.choice',  # fixed
+            'ngeo_placement': ngeo_placement,  # other 'ngeo_per_node'
             'n_seeds': n_seeds,
             'node_active_threshold': node_active_threshold,
             'upper_weight_limit': upper_weight_limit,
@@ -203,7 +205,8 @@ def generate_random_params(num_samples=200):
             'seed_cluster_distance': seed_cluster_distance,
             'ngeom_edges_in_persistence': ngeom_edges_in_persistence,
             'max_persistence_dim': max_persistence_dim,
-            'threshold_sum': threshold_sum
+            'threshold_sum': threshold_sum,
+            'seeding_method': seeding_method
         }
 
         params_list.append(param)
