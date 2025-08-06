@@ -35,6 +35,9 @@ def compute_persistence(graph: nx.Graph,  activation_times, max_dim: int = 2, ng
 
     betti_over_time = {}
     simplex_intervals = defaultdict(list)
+    persistence_intervals_test = np.empty((int(np.nanmax(activation)) + 1,
+                                          max_dim + 1), dtype = object)
+
 
     for t in range(np.nanmax(activation) + 1):
         # print(f"---------- Filtration Time Step: {t} ------------")
@@ -65,6 +68,11 @@ def compute_persistence(graph: nx.Graph,  activation_times, max_dim: int = 2, ng
         for dim in range(max_dim + 1):
             intervals = tree.persistence_intervals_in_dimension(dim)
             intervals = intervals.astype(object)
+            temp_interval = tuple(
+                (birth, 10 if death == float('inf') else death)
+                                   for birth, death in intervals
+                                   )
+            persistence_intervals_test[t, dim] = temp_interval
             # print(f"Dimension: {dim} \n intervals: {intervals} \n ~~~~~~~~~~~~~")
             b = sum(1 for birth, death in intervals if birth <= t < death)
             temp_betti[dim] = b
@@ -74,7 +82,7 @@ def compute_persistence(graph: nx.Graph,  activation_times, max_dim: int = 2, ng
         # print(f"Betti numebrs by tree.betti_numbers[t]: {tree.betti_numbers()}")
         # print(f" Betti Numbers: {temp_betti}")
 
-    return betti_over_time, simplex_intervals
+    return betti_over_time, simplex_intervals, persistence_intervals_test
 
 
 def betti_nums_over_time(betti_over_time: dict):

@@ -302,7 +302,7 @@ def simulate_contagion_realization(graph: nx.graph, init_seeds: tuple, params:di
     ngeom_edges_in_persistence = params.get('geom_edges_in_persistence', False)
 
     # Compute Persistence Homology
-    betti_numbers, _ = gp.compute_persistence(graph=graph, activation_times=activation_times,
+    betti_numbers, _, _ = gp.compute_persistence(graph=graph, activation_times=activation_times,
                                               max_dim=max_persistence_dim,
                                               ngeom_edges_in_persistence=ngeom_edges_in_persistence)
 
