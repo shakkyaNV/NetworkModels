@@ -1,10 +1,10 @@
 import networkx as nx, numpy as np, matplotlib.pyplot as plt
 import os
 
-import gudhi as gd
-from persim import plot_diagrams
+import gudhi as gd, persim
 from collections import defaultdict
 
+_sentinel = object()
 
 def compute_persistence(graph: nx.Graph,  activation_times, max_dim: int = 2, ngeom_edges_in_persistence:bool = False):
     """
@@ -98,7 +98,7 @@ def persim_diagram(simplex_intervals):
         latest = simplex_intervals[dim][-1][1]
         diagrams.append(np.array(latest, dtype=np.float64))
 
-    plot_diagrams(diagrams, show=True)
+    persim.plot_diagrams(diagrams, show=True)
 
 def plot_persistence_barcodes(simplex_intervals, activation_times, max_dim=2):
     colors = ['tab:blue', 'tab:orange', 'tab:green']
@@ -116,3 +116,45 @@ def plot_persistence_barcodes(simplex_intervals, activation_times, max_dim=2):
     plt.yticks([])
     plt.grid(True)
     plt.show()
+
+
+def persistence_landscapes(simplex_intervals: dict, start = _sentinel, stop = _sentinel, num_steps: int = 10, flatten: bool = False,
+                           inf_replacement: float = 10.0):
+
+    time_indexed_generator_dict = defaultdict(lambda: [[] for _ in range(3)])
+    for hom_deg, time_gen_list in simplex_intervals.items():
+        for time_step, gens in time_gen_list:
+            time_indexed_generator_dict[time_step][hom_deg] = gens
+
+    landscape_per_time = {}
+    for t, homology_lists in sorted(time_indexed_generator_dict.items()):
+        diagram_all_generators = {}
+        for hom_deg, pairs in enumerate(homology_lists):
+            # if not pairs:
+            #     continue
+            diag = []
+            for birth, death in pairs:
+                birth = float(birth)
+                death = float('inf') if death == float('inf') else float(death)
+                if np.isinf(death):
+                    death = inf_replacement
+                diag.append((birth, death))
+            diag = np.array(diag).reshape(-1, 2)
+            diagram_all_generators[hom_deg] = np.array(diag)
+
+        filtered = np.array([diagram_all_generators[0],
+                                     diagram_all_generators[1],
+                                     diagram_all_generators[2]], dtype=object)
+        filtered = [arr for arr in filtered if arr.shape[0] > 0]
+        pl_vector = {}
+        for hom_deg, _ in simplex_intervals.items():
+            hom_deg = 0
+            pl = persim.PersistenceLandscaper(hom_deg=hom_deg, num_steps=num_steps, flatten=flatten)
+            print(f"t: {t}, hom_deg: {hom_deg}, and diagram: {filtered}")
+            pl.fit(filtered)
+            landscape = pl.transform(filtered)
+            mean_landscape = landscape.mean(axis=0)  #- vector of length num_steps
+            pl_vector[hom_deg] = mean_landscape
+
+            landscape_per_time[t] = pl_vector
+    return landscape_per_time
