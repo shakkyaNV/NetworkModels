@@ -1,7 +1,9 @@
 import networkx as nx, numpy as np, matplotlib.pyplot as plt
 import os
-
-import gudhi as gd, persim
+import persim
+import gudhi as gd
+from gudhi.representations import DiagramSelector, DiagramScaler, Landscape, Clamping, PersistenceImage
+from sklearn.preprocessing import MinMaxScaler
 from collections import defaultdict
 
 _sentinel = object()
@@ -35,13 +37,14 @@ def compute_persistence(graph: nx.Graph,  activation_times, max_dim: int = 2, ng
 
     betti_over_time = {}
     simplex_intervals = defaultdict(list)
-    persistence_intervals_test = np.empty((int(np.nanmax(activation)) + 1,
+    persistence = np.empty((int(np.nanmax(activation)) + 1,
                                           max_dim + 1), dtype = object)
+    persistence_for_representation = []  ## gudhi tools requires a special format for diagrams
 
 
     for t in range(np.nanmax(activation) + 1):
         # print(f"---------- Filtration Time Step: {t} ------------")
-        tree = gd.SimplexTree()
+        tree = gd.simplex_tree.SimplexTree(None)
         tree.make_filtration_non_decreasing()
         # tree.initialize_filtration()
 
@@ -68,11 +71,9 @@ def compute_persistence(graph: nx.Graph,  activation_times, max_dim: int = 2, ng
         for dim in range(max_dim + 1):
             intervals = tree.persistence_intervals_in_dimension(dim)
             intervals = intervals.astype(object)
-            temp_interval = tuple(
-                (birth, 10 if death == float('inf') else death)
-                                   for birth, death in intervals
-                                   )
-            persistence_intervals_test[t, dim] = temp_interval
+            persistence[t, dim] = intervals
+            persistence_for_representation.extend([(dim, tuple(pair)) for pair in intervals])
+
             # print(f"Dimension: {dim} \n intervals: {intervals} \n ~~~~~~~~~~~~~")
             b = sum(1 for birth, death in intervals if birth <= t < death)
             temp_betti[dim] = b
@@ -82,7 +83,7 @@ def compute_persistence(graph: nx.Graph,  activation_times, max_dim: int = 2, ng
         # print(f"Betti numebrs by tree.betti_numbers[t]: {tree.betti_numbers()}")
         # print(f" Betti Numbers: {temp_betti}")
 
-    return betti_over_time, simplex_intervals, persistence_intervals_test
+    return betti_over_time, persistence, persistence_for_representation
 
 
 def betti_nums_over_time(betti_over_time: dict):
@@ -98,6 +99,28 @@ def betti_nums_over_time(betti_over_time: dict):
     plt.title("Betti Counts")
     plt.legend()
     plt.grid(True)
+    plt.show()
+
+def persistence_diagram(persistence_for_representation: list, colormap: tuple = None):
+    """
+    Draws persistence diagram directly from gudhi.SimplexTree.persistence_intervals_in_dimension:
+    :param persistence_for_representation: List(Tuple(int, Tuple(birth, death)))
+    :param colormap: matplotlib qualitative colormap Tuple(float, float, .. )
+    :return: plt.show()
+    """
+    ax = gd.persistence_graphical_tools.plot_persistence_diagram(persistence_for_representation,
+                                                                 legend = True, colormap=colormap)
+    plt.show()
+
+def persistence_barcodes(persistence_for_representation: list, colormap: tuple = None):
+    """
+        Draws persistence diagram directly from gudhi.SimplexTree.persistence_intervals_in_dimension:
+        :param persistence_for_representation: List(Tuple(int, Tuple(birth, death)))
+        :param colormap: matplotlib qualitative colormap Tuple(float, float, .. )
+        :return: plt.show()
+        """
+    ax = gd.persistence_graphical_tools.plot_persistence_barcode(persistence_for_representation,
+                                                                 legend=True, colormap=colormap)
     plt.show()
 
 def persim_diagram(simplex_intervals):
@@ -125,9 +148,49 @@ def plot_persistence_barcodes(simplex_intervals, activation_times, max_dim=2):
     plt.grid(True)
     plt.show()
 
+def persistence_representation(persistence: np.ndarray, bandwidth:float = 0.1, resolution:int =50, num_landscapes:int =3):
+    """
+    Create persistence landscape/image arrays, later to be visualized
+    :param persistence: gudhi.SimplexTree.persistence_intervals_in_dimension (nx2): each (birth, death)
+    :param bandwidth: bandwidth for persitence image (determines the smoothing of gaussian smoother around hotspots)
+    :param resolution: resolution of persistence
+    :param num_landscapes: number of landscapes
+    :return: np.ndarray
+    """
+    max_dim = persistence.shape[1]
 
-def persistence_landscapes(simplex_intervals: dict, start = _sentinel, stop = _sentinel, num_steps: int = 10, flatten: bool = False,
-                           inf_replacement: float = 10.0):
+    # preprocessing
+    proc_finite = DiagramSelector(use=True, point_type='finite')
+    proc_scaler = DiagramScaler(use=True, scalers=[([0, 1], MinMaxScaler())])
+    proc_clamp = DiagramScaler(use=True, scalers=[([1], Clamping(maximum=.9))])
+    call_plandscape = Landscape(resolution=resolution, num_landscapes=num_landscapes)
+    call_pimage = PersistenceImage(bandwidth=bandwidth, weight=lambda x: x[1], im_range=[0, 1, 0, 1], resolution=[resolution, resolution])
+    params = {'num_landscapes': num_landscapes, 'bandwidth': bandwidth, 'resolution': resolution,
+              'pre-processing': ['finite', 'mix_max_scaler', 'clamp']}
+    L = list()
+    I = list()
+
+    for dim in range(max_dim):
+        print(f"Dimension {dim}:")
+        persistence_in_dim = np.vstack(persistence[:, dim])
+
+        # skip to next dim if current dim has no finite points (which is the case for homology dim = 2 (sometimes 1)
+        if len(proc_finite(persistence_in_dim)) == 0:
+            continue
+
+        diagram = proc_clamp(proc_scaler(proc_finite(persistence_in_dim)))
+        diagram = np.asarray(diagram, dtype = np.float64)
+
+        v_landscape = call_plandscape(diagram)
+        v_image = call_pimage(diagram)
+        L.append(v_landscape)
+        I.append(v_image)
+
+    return L, I, params
+
+
+def persistence_landscapes_old(simplex_intervals: dict, start = _sentinel, stop = _sentinel, num_steps: int = 10, flatten: bool = False,
+                               inf_replacement: float = 10.0):
 
     time_indexed_generator_dict = defaultdict(lambda: [[] for _ in range(3)])
     for hom_deg, time_gen_list in simplex_intervals.items():
