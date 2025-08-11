@@ -39,7 +39,7 @@ def compute_persistence(graph: nx.Graph,  activation_times, max_dim: int = 2, ng
     simplex_intervals = defaultdict(list)
     persistence = np.empty((int(np.nanmax(activation)) + 1,
                                           max_dim + 1), dtype = object)
-    persistence_for_representation = []  ## gudhi tools requires a special format for diagrams
+    persistence_for_graphics = []  ## gudhi tools requires a special format for diagrams
 
 
     for t in range(np.nanmax(activation) + 1):
@@ -72,7 +72,7 @@ def compute_persistence(graph: nx.Graph,  activation_times, max_dim: int = 2, ng
             intervals = tree.persistence_intervals_in_dimension(dim)
             intervals = intervals.astype(object)
             persistence[t, dim] = intervals
-            persistence_for_representation.extend([(dim, tuple(pair)) for pair in intervals])
+            persistence_for_graphics.extend([(dim, tuple(pair)) for pair in intervals])
 
             # print(f"Dimension: {dim} \n intervals: {intervals} \n ~~~~~~~~~~~~~")
             b = sum(1 for birth, death in intervals if birth <= t < death)
@@ -83,7 +83,7 @@ def compute_persistence(graph: nx.Graph,  activation_times, max_dim: int = 2, ng
         # print(f"Betti numebrs by tree.betti_numbers[t]: {tree.betti_numbers()}")
         # print(f" Betti Numbers: {temp_betti}")
 
-    return betti_over_time, persistence, persistence_for_representation
+    return betti_over_time, persistence, persistence_for_graphics
 
 
 def betti_nums_over_time(betti_over_time: dict):
@@ -150,25 +150,26 @@ def plot_persistence_barcodes(simplex_intervals, activation_times, max_dim=2):
 
 def persistence_representation(persistence: np.ndarray, bandwidth:float = 0.1, resolution:int =50, num_landscapes:int =3):
     """
-    Create persistence landscape/image arrays, later to be visualized
+    Create persistence landscape/image arrays, later to be visualized/PCA'd
     :param persistence: gudhi.SimplexTree.persistence_intervals_in_dimension (nx2): each (birth, death)
     :param bandwidth: bandwidth for persitence image (determines the smoothing of gaussian smoother around hotspots)
     :param resolution: resolution of persistence
     :param num_landscapes: number of landscapes
-    :return: np.ndarray
+    :return: list(defaultdict, defaultdict, dict)
     """
     max_dim = persistence.shape[1]
 
     # preprocessing
     proc_finite = DiagramSelector(use=True, point_type='finite')
+    proc_essential = DiagramSelector(use=False, point_type='essential')
     proc_scaler = DiagramScaler(use=True, scalers=[([0, 1], MinMaxScaler())])
     proc_clamp = DiagramScaler(use=True, scalers=[([1], Clamping(maximum=.9))])
     call_plandscape = Landscape(resolution=resolution, num_landscapes=num_landscapes)
     call_pimage = PersistenceImage(bandwidth=bandwidth, weight=lambda x: x[1], im_range=[0, 1, 0, 1], resolution=[resolution, resolution])
     params = {'num_landscapes': num_landscapes, 'bandwidth': bandwidth, 'resolution': resolution,
               'pre-processing': ['finite', 'mix_max_scaler', 'clamp']}
-    L = list()
-    I = list()
+    L = defaultdict()
+    I = defaultdict()
 
     for dim in range(max_dim):
         print(f"Dimension {dim}:")
@@ -183,10 +184,59 @@ def persistence_representation(persistence: np.ndarray, bandwidth:float = 0.1, r
 
         v_landscape = call_plandscape(diagram)
         v_image = call_pimage(diagram)
-        L.append(v_landscape)
-        I.append(v_image)
+        L[dim] = v_landscape
+        I[dim] = v_image
 
     return L, I, params
+
+def persistence_representation_t(persistence: np.ndarray, bandwidth:float = 0.1, resolution:int =50, num_landscapes:int =3):
+    """
+    Create persistence landscape/image arrays, later to be visualized/PCA'd
+    :param persistence: gudhi.SimplexTree.persistence_intervals_in_dimension (nx2): each (birth, death)
+    :param bandwidth: bandwidth for persitence image (determines the smoothing of gaussian smoother around hotspots)
+    :param resolution: resolution of persistence
+    :param num_landscapes: number of landscapes
+    :return: defaultdict [timestep][dim] entry size=resol*num_landscape,
+    defaultdict [timestep][dim] entry size=resol*resol , defaultdict[timestep] entrysize = dim --->>>> Changed otherway around
+    """
+    max_dim = persistence.shape[1]
+    timesteps = persistence.shape[0]
+    # preprocessing
+    proc_finite = DiagramSelector(use=True, point_type='finite')
+    proc_essential = DiagramSelector(use=False, point_type='essential')
+    proc_scaler = DiagramScaler(use=True, scalers=[([0, 1], MinMaxScaler())])
+    proc_clamp = DiagramScaler(use=True, scalers=[([1], Clamping(maximum=.9))])
+    call_plandscape = Landscape(resolution=resolution, num_landscapes=num_landscapes)
+    call_pimage = PersistenceImage(bandwidth=bandwidth, weight=lambda x: x[1], im_range=[0, 1, 0, 1],
+                                   resolution=[resolution, resolution])
+    params = {'num_landscapes': num_landscapes, 'bandwidth': bandwidth, 'resolution': resolution,
+              'pre-processing': ['finite', 'mix_max_scaler', 'clamp']}
+    L = []
+    I = []
+    essential_features = []
+    for timestep in range(timesteps):
+        L_d = {k: [np.zeros((resolution * num_landscapes, ))] for k in range(max_dim)}
+        I_d = {k: [np.zeros((resolution * resolution, ))] for k in range(max_dim)}
+        E_d = {k: 0 for k in range(max_dim)}
+        for dim in range(max_dim):
+            if len(persistence[timestep, dim]) == 0:
+                continue
+            persistence_in_dim = np.vstack(persistence[timestep, dim])
+            # skip to next dim if current dim has no finite points (which is the case for homology dim = 2 (sometimes 1)
+            if len(proc_finite(persistence_in_dim)) == 0:
+                continue
+            diagram = proc_clamp(proc_scaler(proc_finite(persistence_in_dim)))
+            diagram = np.asarray(diagram, dtype=np.float64)
+
+            E_d[dim] = len(proc_essential(persistence_in_dim))
+            v_landscape = call_plandscape(diagram)
+            v_image = call_pimage(diagram)
+            L_d[dim] = v_landscape
+            I_d[dim] = v_image
+        L.append(L_d)
+        I.append(I_d)
+        essential_features.append(E_d)
+    return L, I, essential_features, params
 
 
 def persistence_landscapes_old(simplex_intervals: dict, start = _sentinel, stop = _sentinel, num_steps: int = 10, flatten: bool = False,

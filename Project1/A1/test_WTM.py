@@ -280,7 +280,8 @@ def simulate_contagion_map(params:dict):
 
 
 def simulate_contagion_realization(graph: nx.graph, init_seeds: tuple, params:dict,
-                                   max_steps:int = 100, sim_id:int = 1, realization_id:int = 1):
+                                   max_steps:int = 100, sim_id:int = 1, realization_id:int = 1,
+                                   calculate_representation:bool = False):
 
     weights = [d.get('weight', 0) for _, _, d in graph.edges(data=True)]
     average_weight = np.mean(weights) if weights else 0
@@ -296,15 +297,16 @@ def simulate_contagion_realization(graph: nx.graph, init_seeds: tuple, params:di
                                                                                  'node_active_threshold', 0.001),
                                                                              max_steps=max_steps,
                                                                              weighted=params.get('weighted', False))
-    activation_series = snapshots_to_activation_times_series(snapshots, params.get('num_nodes'))
 
     max_persistence_dim = int(params.get('max_persistence_dim', 2))
     ngeom_edges_in_persistence = params.get('geom_edges_in_persistence', False)
 
     # Compute Persistence Homology
-    betti_numbers, _, _ = gp.compute_persistence(graph=graph, activation_times=activation_times,
+    betti_numbers, persistence, _ = gp.compute_persistence(graph=graph, activation_times=activation_times,
                                               max_dim=max_persistence_dim,
                                               ngeom_edges_in_persistence=ngeom_edges_in_persistence)
+
+    activation_series = snapshots_to_activation_times_series(snapshots, params.get('num_nodes'))
 
     results = []
     for t, active_nodes_time_t in enumerate(activation_series):
@@ -337,6 +339,23 @@ def simulate_contagion_realization(graph: nx.graph, init_seeds: tuple, params:di
         }
         results.append(features_dict)
 
+    if calculate_representation:
+        bandwidth = params.get('bandwidth', 0.1)
+        num_landscapes = params.get('num_landscapes', 3)
+        resolution = params.get('resolution', 50)
+        L, I, E, representaion_params = gp.persistence_representation_t(persistence=persistence,
+                                                                                         bandwidth=bandwidth,
+                                                                                         resolution=resolution,
+                                                                                         num_landscapes=num_landscapes)
+        rename = lambda d, prefix: {f"{prefix}_{k}": v for k, v in d.items()}
+
+        L_timesteps = len(L)
+        assert L_timesteps == len(results)
+        for res_dict, timestep in zip(results, range(L_timesteps)):
+            res_dict.update(rename(L[timestep], 'L'))
+            res_dict.update(rename(I[timestep], 'I'))
+            res_dict.update(rename(E[timestep], 'E'))
+
     return graph, snapshots, activation_times, results
 
 def main_sims(params_list:list ,
@@ -361,7 +380,8 @@ def main_sims(params_list:list ,
                                                                              init_seeds = seed_nodes,
                                                                              params=params, sim_id = i,
                                                                              max_steps=max_steps,
-                                                                             realization_id=j)
+                                                                             realization_id=j,
+                                                                             calculate_representation=params.get('calculate_representation', False))
             activation_times_results.append({'sim_id': i,
                                             'realization_id': j,
                                             'activation_times': activation_times})
