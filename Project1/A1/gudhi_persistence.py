@@ -2,13 +2,25 @@ import networkx as nx, numpy as np, matplotlib.pyplot as plt
 import os
 import persim
 import gudhi as gd
-from gudhi.representations import DiagramSelector, DiagramScaler, Landscape, Clamping, PersistenceImage
+from gudhi.representations import (
+    DiagramSelector,
+    DiagramScaler,
+    Landscape,
+    Clamping,
+    PersistenceImage,
+)
 from sklearn.preprocessing import MinMaxScaler
 from collections import defaultdict
 
 _sentinel = object()
 
-def compute_persistence(graph: nx.Graph,  activation_times, max_dim: int = 2, ngeom_edges_in_persistence:bool = False):
+
+def compute_persistence(
+    graph: nx.Graph,
+    activation_times,
+    max_dim: int = 2,
+    ngeom_edges_in_persistence: bool = False,
+):
     """
     Compute the persistence homology given a networkx and a list of activation times.
     :param graph: nx.Graph
@@ -22,25 +34,32 @@ def compute_persistence(graph: nx.Graph,  activation_times, max_dim: int = 2, ng
 
         if ngeom_edges_in_persistence:
             G = graph
-        else: ######### TEMPORARY, Change to use a distance threshold to see which are geom and ngeom
+        else:  ######### TEMPORARY, Change to use a distance threshold to see which are geom and ngeom
             G = nx.Graph()
-            G.add_nodes_from(graph.nodes(data = True))
-            G.add_edges_from([(u, v, d) for u, v, d in graph.edges(data=True) if d.get('type') == 'geometric'])
+            G.add_nodes_from(graph.nodes(data=True))
+            G.add_edges_from(
+                [
+                    (u, v, d)
+                    for u, v, d in graph.edges(data=True)
+                    if d.get("type") == "geometric"
+                ]
+            )
 
         G = nx.relabel_nodes(G, lambda x: int(x))
-        activation = np.array([int(x)
-                               if not np.isnan(x) else np.nan
-                               for x in activation_times], dtype='object')
+        activation = np.array(
+            [int(x) if not np.isnan(x) else np.nan for x in activation_times],
+            dtype="object",
+        )
         return G, activation
 
-    graph, activation = clean_inputs(graph, activation_times, ngeom_edges_in_persistence)
+    graph, activation = clean_inputs(
+        graph, activation_times, ngeom_edges_in_persistence
+    )
 
     betti_over_time = {}
     simplex_intervals = defaultdict(list)
-    persistence = np.empty((int(np.nanmax(activation)) + 1,
-                                          max_dim + 1), dtype = object)
+    persistence = np.empty((int(np.nanmax(activation)) + 1, max_dim + 1), dtype=object)
     persistence_for_graphics = []  ## gudhi tools requires a special format for diagrams
-
 
     for t in range(np.nanmax(activation) + 1):
         # print(f"---------- Filtration Time Step: {t} ------------")
@@ -56,8 +75,8 @@ def compute_persistence(graph: nx.Graph,  activation_times, max_dim: int = 2, ng
 
         for node in subg.nodes():
             tree.insert([node], filtration=t)
-        for u, v, labels in subg.edges(data = True):
-            if labels['weight'] < t:
+        for u, v, labels in subg.edges(data=True):
+            if labels["weight"] < t:
                 edge_filtration = max(activation[u], activation[v])
                 tree.insert([u, v], filtration=edge_filtration)
 
@@ -101,6 +120,7 @@ def betti_nums_over_time(betti_over_time: dict):
     plt.grid(True)
     plt.show()
 
+
 def persistence_diagram(persistence_for_representation: list, colormap: tuple = None):
     """
     Draws persistence diagram directly from gudhi.SimplexTree.persistence_intervals_in_dimension:
@@ -108,20 +128,24 @@ def persistence_diagram(persistence_for_representation: list, colormap: tuple = 
     :param colormap: matplotlib qualitative colormap Tuple(float, float, .. )
     :return: plt.show()
     """
-    ax = gd.persistence_graphical_tools.plot_persistence_diagram(persistence_for_representation,
-                                                                 legend = True, colormap=colormap)
+    ax = gd.persistence_graphical_tools.plot_persistence_diagram(
+        persistence_for_representation, legend=True, colormap=colormap
+    )
     plt.show()
+
 
 def persistence_barcodes(persistence_for_representation: list, colormap: tuple = None):
     """
-        Draws persistence diagram directly from gudhi.SimplexTree.persistence_intervals_in_dimension:
-        :param persistence_for_representation: List(Tuple(int, Tuple(birth, death)))
-        :param colormap: matplotlib qualitative colormap Tuple(float, float, .. )
-        :return: plt.show()
-        """
-    ax = gd.persistence_graphical_tools.plot_persistence_barcode(persistence_for_representation,
-                                                                 legend=True, colormap=colormap)
+    Draws persistence diagram directly from gudhi.SimplexTree.persistence_intervals_in_dimension:
+    :param persistence_for_representation: List(Tuple(int, Tuple(birth, death)))
+    :param colormap: matplotlib qualitative colormap Tuple(float, float, .. )
+    :return: plt.show()
+    """
+    ax = gd.persistence_graphical_tools.plot_persistence_barcode(
+        persistence_for_representation, legend=True, colormap=colormap
+    )
     plt.show()
+
 
 def persim_diagram(simplex_intervals):
     diagrams = []
@@ -131,15 +155,21 @@ def persim_diagram(simplex_intervals):
 
     persim.plot_diagrams(diagrams, show=True)
 
+
 def plot_persistence_barcodes(simplex_intervals, activation_times, max_dim=2):
-    colors = ['tab:blue', 'tab:orange', 'tab:green']
+    colors = ["tab:blue", "tab:orange", "tab:green"]
 
     for dim in range(max_dim + 1):
         intervals = simplex_intervals[dim][-1][1]
         for i, (birth, death) in enumerate(intervals):
             death_val = death if np.isfinite(death) else np.nanmax(activation_times)
-            plt.hlines(y=dim + i * 0.1, xmin=birth, xmax=death_val, color=colors[dim % len(colors)])
-        plt.axhline(dim, linestyle='--', color='gray', alpha=0.5)
+            plt.hlines(
+                y=dim + i * 0.1,
+                xmin=birth,
+                xmax=death_val,
+                color=colors[dim % len(colors)],
+            )
+        plt.axhline(dim, linestyle="--", color="gray", alpha=0.5)
 
     plt.xlabel("Filtration (activation time)")
     plt.ylabel("Homology class index")
@@ -148,7 +178,13 @@ def plot_persistence_barcodes(simplex_intervals, activation_times, max_dim=2):
     plt.grid(True)
     plt.show()
 
-def persistence_representation(persistence: np.ndarray, bandwidth:float = 0.1, resolution:int =50, num_landscapes:int =3):
+
+def persistence_representation(
+    persistence: np.ndarray,
+    bandwidth: float = 0.1,
+    resolution: int = 50,
+    num_landscapes: int = 3,
+):
     """
     Create persistence landscape/image arrays, later to be visualized/PCA'd
     :param persistence: gudhi.SimplexTree.persistence_intervals_in_dimension (nx2): each (birth, death)
@@ -160,14 +196,23 @@ def persistence_representation(persistence: np.ndarray, bandwidth:float = 0.1, r
     max_dim = persistence.shape[1]
 
     # preprocessing
-    proc_finite = DiagramSelector(use=True, point_type='finite')
-    proc_essential = DiagramSelector(use=False, point_type='essential')
+    proc_finite = DiagramSelector(use=True, point_type="finite")
+    proc_essential = DiagramSelector(use=False, point_type="essential")
     proc_scaler = DiagramScaler(use=True, scalers=[([0, 1], MinMaxScaler())])
-    proc_clamp = DiagramScaler(use=True, scalers=[([1], Clamping(maximum=.9))])
+    proc_clamp = DiagramScaler(use=True, scalers=[([1], Clamping(maximum=0.9))])
     call_plandscape = Landscape(resolution=resolution, num_landscapes=num_landscapes)
-    call_pimage = PersistenceImage(bandwidth=bandwidth, weight=lambda x: x[1], im_range=[0, 1, 0, 1], resolution=[resolution, resolution])
-    params = {'num_landscapes': num_landscapes, 'bandwidth': bandwidth, 'resolution': resolution,
-              'pre-processing': ['finite', 'mix_max_scaler', 'clamp']}
+    call_pimage = PersistenceImage(
+        bandwidth=bandwidth,
+        weight=lambda x: x[1],
+        im_range=[0, 1, 0, 1],
+        resolution=[resolution, resolution],
+    )
+    params = {
+        "num_landscapes": num_landscapes,
+        "bandwidth": bandwidth,
+        "resolution": resolution,
+        "pre-processing": ["finite", "mix_max_scaler", "clamp"],
+    }
     L = defaultdict()
     I = defaultdict()
 
@@ -180,7 +225,7 @@ def persistence_representation(persistence: np.ndarray, bandwidth:float = 0.1, r
             continue
 
         diagram = proc_clamp(proc_scaler(proc_finite(persistence_in_dim)))
-        diagram = np.asarray(diagram, dtype = np.float64)
+        diagram = np.asarray(diagram, dtype=np.float64)
 
         v_landscape = call_plandscape(diagram)
         v_image = call_pimage(diagram)
@@ -189,7 +234,13 @@ def persistence_representation(persistence: np.ndarray, bandwidth:float = 0.1, r
 
     return L, I, params
 
-def persistence_representation_t(persistence: np.ndarray, bandwidth:float = 0.1, resolution:int =50, num_landscapes:int =3):
+
+def persistence_representation_t(
+    persistence: np.ndarray,
+    bandwidth: float = 0.1,
+    resolution: int = 50,
+    num_landscapes: int = 3,
+):
     """
     Create persistence landscape/image arrays, later to be visualized/PCA'd
     :param persistence: gudhi.SimplexTree.persistence_intervals_in_dimension (nx2): each (birth, death)
@@ -202,21 +253,29 @@ def persistence_representation_t(persistence: np.ndarray, bandwidth:float = 0.1,
     max_dim = persistence.shape[1]
     timesteps = persistence.shape[0]
     # preprocessing
-    proc_finite = DiagramSelector(use=True, point_type='finite')
-    proc_essential = DiagramSelector(use=False, point_type='essential')
+    proc_finite = DiagramSelector(use=True, point_type="finite")
+    proc_essential = DiagramSelector(use=False, point_type="essential")
     proc_scaler = DiagramScaler(use=True, scalers=[([0, 1], MinMaxScaler())])
-    proc_clamp = DiagramScaler(use=True, scalers=[([1], Clamping(maximum=.9))])
+    proc_clamp = DiagramScaler(use=True, scalers=[([1], Clamping(maximum=0.9))])
     call_plandscape = Landscape(resolution=resolution, num_landscapes=num_landscapes)
-    call_pimage = PersistenceImage(bandwidth=bandwidth, weight=lambda x: x[1], im_range=[0, 1, 0, 1],
-                                   resolution=[resolution, resolution])
-    params = {'num_landscapes': num_landscapes, 'bandwidth': bandwidth, 'resolution': resolution,
-              'pre-processing': ['finite', 'mix_max_scaler', 'clamp']}
+    call_pimage = PersistenceImage(
+        bandwidth=bandwidth,
+        weight=lambda x: x[1],
+        im_range=[0, 1, 0, 1],
+        resolution=[resolution, resolution],
+    )
+    params = {
+        "num_landscapes": num_landscapes,
+        "bandwidth": bandwidth,
+        "resolution": resolution,
+        "pre-processing": ["finite", "mix_max_scaler", "clamp"],
+    }
     L = []
     I = []
     essential_features = []
     for timestep in range(timesteps):
-        L_d = {k: [np.zeros((resolution * num_landscapes, ))] for k in range(max_dim)}
-        I_d = {k: [np.zeros((resolution * resolution, ))] for k in range(max_dim)}
+        L_d = {k: [np.zeros((resolution * num_landscapes,))] for k in range(max_dim)}
+        I_d = {k: [np.zeros((resolution * resolution,))] for k in range(max_dim)}
         E_d = {k: 0 for k in range(max_dim)}
         for dim in range(max_dim):
             if len(persistence[timestep, dim]) == 0:
@@ -239,8 +298,14 @@ def persistence_representation_t(persistence: np.ndarray, bandwidth:float = 0.1,
     return L, I, essential_features, params
 
 
-def persistence_landscapes_old(simplex_intervals: dict, start = _sentinel, stop = _sentinel, num_steps: int = 10, flatten: bool = False,
-                               inf_replacement: float = 10.0):
+def persistence_landscapes_old(
+    simplex_intervals: dict,
+    start=_sentinel,
+    stop=_sentinel,
+    num_steps: int = 10,
+    flatten: bool = False,
+    inf_replacement: float = 10.0,
+):
 
     time_indexed_generator_dict = defaultdict(lambda: [[] for _ in range(3)])
     for hom_deg, time_gen_list in simplex_intervals.items():
@@ -256,25 +321,32 @@ def persistence_landscapes_old(simplex_intervals: dict, start = _sentinel, stop 
             diag = []
             for birth, death in pairs:
                 birth = float(birth)
-                death = float('inf') if death == float('inf') else float(death)
+                death = float("inf") if death == float("inf") else float(death)
                 if np.isinf(death):
                     death = inf_replacement
                 diag.append((birth, death))
             diag = np.array(diag).reshape(-1, 2)
             diagram_all_generators[hom_deg] = np.array(diag)
 
-        filtered = np.array([diagram_all_generators[0],
-                                     diagram_all_generators[1],
-                                     diagram_all_generators[2]], dtype=object)
+        filtered = np.array(
+            [
+                diagram_all_generators[0],
+                diagram_all_generators[1],
+                diagram_all_generators[2],
+            ],
+            dtype=object,
+        )
         filtered = [arr for arr in filtered if arr.shape[0] > 0]
         pl_vector = {}
         for hom_deg, _ in simplex_intervals.items():
             hom_deg = 0
-            pl = persim.PersistenceLandscaper(hom_deg=hom_deg, num_steps=num_steps, flatten=flatten)
+            pl = persim.PersistenceLandscaper(
+                hom_deg=hom_deg, num_steps=num_steps, flatten=flatten
+            )
             print(f"t: {t}, hom_deg: {hom_deg}, and diagram: {filtered}")
             pl.fit(filtered)
             landscape = pl.transform(filtered)
-            mean_landscape = landscape.mean(axis=0)  #- vector of length num_steps
+            mean_landscape = landscape.mean(axis=0)  # - vector of length num_steps
             pl_vector[hom_deg] = mean_landscape
 
             landscape_per_time[t] = pl_vector
