@@ -74,9 +74,9 @@ def compute_persistence(
         subg = graph.subgraph(active_nodes).copy()
 
         for node in subg.nodes():
-            tree.insert([node], filtration=t)
+            tree.insert([node], filtration=activation[node])
         for u, v, labels in subg.edges(data=True):
-            if labels["weight"] < t:
+            if labels["weight"] <= t:
                 edge_filtration = max(activation[u], activation[v])
                 tree.insert([u, v], filtration=edge_filtration)
 

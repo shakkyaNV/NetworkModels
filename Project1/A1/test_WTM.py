@@ -244,7 +244,7 @@ def contagion_propagation(
                             weight = graph.get_edge_data(node_i, ith_neighbor).get(
                                 "weight", 0
                             )
-                            if weight < time_step:
+                            if weight <= time_step:
                                 weight_qualifying_nodes += 1
 
                     if (
