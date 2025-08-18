@@ -15,14 +15,10 @@ from collections import defaultdict
 _sentinel = object()
 
 
-def compute_persistence(
-    graph: nx.Graph,
-    activation_times,
-    max_dim: int = 2,
-    ngeom_edges_in_persistence: bool = False,
-):
+def compute_persistence(graph: nx.Graph, activation_times, max_dim: int = 2, ngeom_edges_in_persistence: bool = False):
     """
     Compute the persistence homology given a networkx and a list of activation times.
+    ######## REWRITE THE WHOLE FUNCTION #######
     :param graph: nx.Graph
     :param activation_times: np.ndarray
     :param max_dim: Max Betti Number to compute
@@ -59,7 +55,11 @@ def compute_persistence(
     betti_over_time = {}
     simplex_intervals = defaultdict(list)
     persistence = np.empty((int(np.nanmax(activation)) + 1, max_dim + 1), dtype=object)
-    persistence_for_graphics = []  ## gudhi tools requires a special format for diagrams
+    for t in range(np.nanmax(activation) + 1):
+        for d in range(max_dim + 1):
+            persistence[t, d] = []
+
+    # persistence_for_graphics = []  ## gudhi tools requires a special format for diagrams
 
     for t in range(np.nanmax(activation) + 1):
         # print(f"---------- Filtration Time Step: {t} ------------")
@@ -81,7 +81,13 @@ def compute_persistence(
                 tree.insert([u, v], filtration=edge_filtration)
 
         tree.compute_persistence(min_persistence=0, persistence_dim_max=max_dim)
-
+        tree2 = tree.copy()
+        temp_pers = tree2.persistence(min_persistence = 0, persistence_dim_max = 2)
+        for dim, (birth, death) in temp_pers:
+            for time in range(np.nanmax(activation) + 1):
+                if birth <= time < death:
+                    persistence[time, dim].append((birth, death))
+        # persistence = 0
         # Using intervals to calculate persistent homology, because we need intervals
         # for barcode graphs anyway.
         # Otherwise, tree.persistent_pairs(), or tree.betti_numebers() would
@@ -90,8 +96,8 @@ def compute_persistence(
         for dim in range(max_dim + 1):
             intervals = tree.persistence_intervals_in_dimension(dim)
             intervals = intervals.astype(object)
-            persistence[t, dim] = intervals
-            persistence_for_graphics.extend([(dim, tuple(pair)) for pair in intervals])
+            # persistence[t, dim] = intervals
+            # persistence_for_graphics.extend([(dim, tuple(pair)) for pair in intervals])
 
             # print(f"Dimension: {dim} \n intervals: {intervals} \n ~~~~~~~~~~~~~")
             b = sum(1 for birth, death in intervals if birth <= t < death)
@@ -101,6 +107,9 @@ def compute_persistence(
 
         # print(f"Betti numebrs by tree.betti_numbers[t]: {tree.betti_numbers()}")
         # print(f" Betti Numbers: {temp_betti}")
+
+    persistence_for_graphics= tree.persistence(min_persistence = 0, persistence_dim_max = 2)
+    # persistence = np.array([interval for _, interval in persistence_for_graphics])
 
     return betti_over_time, persistence, persistence_for_graphics
 
