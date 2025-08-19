@@ -15,7 +15,12 @@ from collections import defaultdict
 _sentinel = object()
 
 
-def compute_persistence(graph: nx.Graph, activation_times, max_dim: int = 2, ngeom_edges_in_persistence: bool = False):
+def compute_persistence(
+    graph: nx.Graph,
+    activation_times,
+    max_dim: int = 2,
+    ngeom_edges_in_persistence: bool = False,
+):
     """
     Compute the persistence homology given a networkx and a list of activation times.
     ######## REWRITE THE WHOLE FUNCTION #######
@@ -51,7 +56,6 @@ def compute_persistence(graph: nx.Graph, activation_times, max_dim: int = 2, nge
     graph, activation = clean_inputs(
         graph, activation_times, ngeom_edges_in_persistence
     )
-
     betti_over_time = {}
     simplex_intervals = defaultdict(list)
     persistence = np.empty((int(np.nanmax(activation)) + 1, max_dim + 1), dtype=object)
@@ -80,35 +84,38 @@ def compute_persistence(graph: nx.Graph, activation_times, max_dim: int = 2, nge
                 edge_filtration = max(activation[u], activation[v])
                 tree.insert([u, v], filtration=edge_filtration)
 
-        tree.compute_persistence(min_persistence=0, persistence_dim_max=max_dim)
-        tree2 = tree.copy()
-        temp_pers = tree2.persistence(min_persistence = 0, persistence_dim_max = 2)
-        for dim, (birth, death) in temp_pers:
-            for time in range(np.nanmax(activation) + 1):
-                if birth <= time < death:
-                    persistence[time, dim].append((birth, death))
+        # tree.compute_persistence(min_persistence=0, persistence_dim_max=max_dim)
+        # tree2 = tree.copy()
+        for dim, interval in tree.persistence(min_persistence=0, persistence_dim_max=2):
+            persistence[t, dim].append(interval)
+        # for dim, (birth, death) in temp_pers:
+        #     for time in range(np.nanmax(activation) + 1):
+        #         if birth <= time < death:
+        #             persistence[time, dim].append((birth, death))
         # persistence = 0
         # Using intervals to calculate persistent homology, because we need intervals
         # for barcode graphs anyway.
         # Otherwise, tree.persistent_pairs(), or tree.betti_numebers() would
         # be very easy
-        temp_betti = {}
-        for dim in range(max_dim + 1):
-            intervals = tree.persistence_intervals_in_dimension(dim)
-            intervals = intervals.astype(object)
-            # persistence[t, dim] = intervals
-            # persistence_for_graphics.extend([(dim, tuple(pair)) for pair in intervals])
-
-            # print(f"Dimension: {dim} \n intervals: {intervals} \n ~~~~~~~~~~~~~")
-            b = sum(1 for birth, death in intervals if birth <= t < death)
-            temp_betti[dim] = b
-            simplex_intervals[dim].append((t, [tuple(pair) for pair in intervals]))
-            betti_over_time[t] = temp_betti
-
+        # temp_betti = {}
+        # for dim in range(max_dim + 1):
+        #     intervals = tree.persistence_intervals_in_dimension(dim)
+        #     intervals = intervals.astype(object)
+        #     # persistence[t, dim] = intervals
+        #     # --persistence_for_graphics.extend([(dim, tuple(pair)) for pair in intervals])
+        #
+        #     # print(f"Dimension: {dim} \n intervals: {intervals} \n ~~~~~~~~~~~~~")
+        #     b = sum(1 for birth, death in intervals if birth <= t < death)
+        #     temp_betti[dim] = b
+        #     simplex_intervals[dim].append((t, [tuple(pair) for pair in intervals]))
+        #     betti_over_time[t] = temp_betti
+        betti_over_time = 0
         # print(f"Betti numebrs by tree.betti_numbers[t]: {tree.betti_numbers()}")
         # print(f" Betti Numbers: {temp_betti}")
 
-    persistence_for_graphics= tree.persistence(min_persistence = 0, persistence_dim_max = 2)
+    persistence_for_graphics = tree.persistence(
+        min_persistence=0, persistence_dim_max=2
+    )
     # persistence = np.array([interval for _, interval in persistence_for_graphics])
 
     return betti_over_time, persistence, persistence_for_graphics
@@ -228,7 +235,6 @@ def persistence_representation(
     for dim in range(max_dim):
         print(f"Dimension {dim}:")
         persistence_in_dim = np.vstack(persistence[:, dim])
-
         # skip to next dim if current dim has no finite points (which is the case for homology dim = 2 (sometimes 1)
         if len(proc_finite(persistence_in_dim)) == 0:
             continue
@@ -359,4 +365,4 @@ def persistence_landscapes_old(
             pl_vector[hom_deg] = mean_landscape
 
             landscape_per_time[t] = pl_vector
-    return landscape_per_time
+    return landscape_per
