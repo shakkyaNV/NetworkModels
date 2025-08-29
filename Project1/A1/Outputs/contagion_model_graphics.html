@@ -1,0 +1,211 @@
+<html>
+    <head>
+        <meta charset="utf-8">
+        
+            <script src="lib/bindings/utils.js"></script>
+            <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/vis-network/9.1.2/dist/dist/vis-network.min.css" integrity="sha512-WgxfT5LWjfszlPHXRmBWHkV2eceiWTOBvrKCNbdgDYTHrT2AeLCGbF4sZlZw3UMN3WtL0tGUoIAKsu8mllg/XA==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+            <script src="https://cdnjs.cloudflare.com/ajax/libs/vis-network/9.1.2/dist/vis-network.min.js" integrity="sha512-LnvoEWDFrqGHlHmDD2101OrLcbsfkrzoSpvtSQtxK3RMnRV0eOkhhBN2dXHKRrUU8p2DGRTk35n4O8nWSVe1mQ==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+            
+        
+<center>
+<h1></h1>
+</center>
+
+<!-- <link rel="stylesheet" href="../node_modules/vis/dist/vis.min.css" type="text/css" />
+<script type="text/javascript" src="../node_modules/vis/dist/vis.js"> </script>-->
+        <link
+          href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.0-beta3/dist/css/bootstrap.min.css"
+          rel="stylesheet"
+          integrity="sha384-eOJMYsd53ii+scO/bJGFsiCZc+5NDVN2yr8+0RDqr0Ql0h+rP48ckxlpbzKgwra6"
+          crossorigin="anonymous"
+        />
+        <script
+          src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.0-beta3/dist/js/bootstrap.bundle.min.js"
+          integrity="sha384-JEW9xMcG8R+pH31jmWH6WWP0WintQrMb4s7ZOdauHnUtxwoG2vI5DkLtS3qm9Ekf"
+          crossorigin="anonymous"
+        ></script>
+
+
+        <center>
+          <h1></h1>
+        </center>
+        <style type="text/css">
+
+             #mynetwork {
+                 width: 100%;
+                 height: 600px;
+                 background-color: #ffffff;
+                 border: 1px solid lightgray;
+                 position: relative;
+                 float: left;
+             }
+
+             
+
+             
+
+             
+        </style>
+    </head>
+
+
+    <body>
+        <div class="card" style="width: 100%">
+            
+            
+            <div id="mynetwork" class="card-body"></div>
+        </div>
+
+        
+        
+
+        <script type="text/javascript">
+
+              // initialize global variables.
+              var edges;
+              var nodes;
+              var allNodes;
+              var allEdges;
+              var nodeColors;
+              var originalNodes;
+              var network;
+              var container;
+              var options, data;
+              var filter = {
+                  item : '',
+                  property : '',
+                  value : []
+              };
+
+              
+
+              
+
+              // This method is responsible for drawing the graph, returns the drawn network
+              function drawGraph() {
+                  var container = document.getElementById('mynetwork');
+
+                  
+
+                  // parsing and collecting nodes and edges from the python
+                  nodes = new vis.DataSet([{"color": "#97c2fc", "fixed": {"x": true, "y": true}, "font": {"size": 30}, "id": 0, "label": "0", "shape": "dot", "size": 10, "value": 50, "x": 1000.0, "y": 1.4702742047251474e-05}, {"color": "#97c2fc", "fixed": {"x": true, "y": true}, "font": {"size": 30}, "id": 1, "label": "1", "shape": "dot", "size": 10, "value": 50, "x": 809.0170037208973, "y": 587.7852551873061}, {"color": "#97c2fc", "fixed": {"x": true, "y": true}, "font": {"size": 30}, "id": 2, "label": "2", "shape": "dot", "size": 10, "value": 50, "x": 309.01697689880734, "y": 951.0565490463629}, {"color": "#97c2fc", "fixed": {"x": true, "y": true}, "font": {"size": 30}, "id": 8, "label": "8", "shape": "dot", "size": 10, "value": 50, "x": 309.01712591041843, "y": -951.0564600362343}, {"color": "#97c2fc", "fixed": {"x": true, "y": true}, "font": {"size": 30}, "id": 9, "label": "9", "shape": "dot", "size": 10, "value": 50, "x": 809.016944116253, "y": -587.7852853864664}, {"color": "#97c2fc", "fixed": {"x": true, "y": true}, "font": {"size": 30}, "id": 3, "label": "3", "shape": "dot", "size": 10, "value": 50, "x": -309.01702458252294, "y": 951.0564894417184}, {"color": "#97c2fc", "fixed": {"x": true, "y": true}, "font": {"size": 30}, "id": 4, "label": "4", "shape": "dot", "size": 10, "value": 50, "x": -809.0169917999684, "y": 587.7852551873061}, {"color": "#97c2fc", "fixed": {"x": true, "y": true}, "font": {"size": 30}, "id": 5, "label": "5", "shape": "dot", "size": 10, "value": 50, "x": -999.9999880790709, "y": -7.272003400514403e-05}, {"color": "#97c2fc", "fixed": {"x": true, "y": true}, "font": {"size": 30}, "id": 6, "label": "6", "shape": "dot", "size": 10, "value": 50, "x": -809.016932195324, "y": -587.7852853864664}, {"color": "#97c2fc", "fixed": {"x": true, "y": true}, "font": {"size": 30}, "id": 7, "label": "7", "shape": "dot", "size": 10, "value": 50, "x": -309.01711398948953, "y": -951.0564600362343}]);
+                  edges = new vis.DataSet([{"font": {"align": "top", "size": 30}, "from": 0, "label": "geometric (0)", "title": "geometric (0)", "to": 1, "type": "geometric", "width": 0}, {"font": {"align": "top", "size": 30}, "from": 0, "label": "geometric (0)", "title": "geometric (0)", "to": 2, "type": "geometric", "width": 0}, {"font": {"align": "top", "size": 30}, "from": 0, "label": "geometric (0)", "title": "geometric (0)", "to": 8, "type": "geometric", "width": 0}, {"font": {"align": "top", "size": 30}, "from": 0, "label": "geometric (0)", "title": "geometric (0)", "to": 9, "type": "geometric", "width": 0}, {"font": {"align": "top", "size": 30}, "from": 1, "label": "geometric (0)", "title": "geometric (0)", "to": 2, "type": "geometric", "width": 0}, {"font": {"align": "top", "size": 30}, "from": 1, "label": "geometric (0)", "title": "geometric (0)", "to": 3, "type": "geometric", "width": 0}, {"font": {"align": "top", "size": 30}, "from": 1, "label": "geometric (0)", "title": "geometric (0)", "to": 9, "type": "geometric", "width": 0}, {"font": {"align": "top", "size": 30}, "from": 2, "label": "geometric (0)", "title": "geometric (0)", "to": 3, "type": "geometric", "width": 0}, {"font": {"align": "top", "size": 30}, "from": 2, "label": "geometric (0)", "title": "geometric (0)", "to": 4, "type": "geometric", "width": 0}, {"font": {"align": "top", "size": 30}, "from": 3, "label": "geometric (0)", "title": "geometric (0)", "to": 4, "type": "geometric", "width": 0}, {"font": {"align": "top", "size": 30}, "from": 3, "label": "geometric (0)", "title": "geometric (0)", "to": 5, "type": "geometric", "width": 0}, {"font": {"align": "top", "size": 30}, "from": 4, "label": "geometric (0)", "title": "geometric (0)", "to": 5, "type": "geometric", "width": 0}, {"font": {"align": "top", "size": 30}, "from": 4, "label": "geometric (0)", "title": "geometric (0)", "to": 6, "type": "geometric", "width": 0}, {"font": {"align": "top", "size": 30}, "from": 5, "label": "geometric (0)", "title": "geometric (0)", "to": 6, "type": "geometric", "width": 0}, {"font": {"align": "top", "size": 30}, "from": 5, "label": "geometric (0)", "title": "geometric (0)", "to": 7, "type": "geometric", "width": 0}, {"font": {"align": "top", "size": 30}, "from": 6, "label": "geometric (0)", "title": "geometric (0)", "to": 7, "type": "geometric", "width": 0}, {"font": {"align": "top", "size": 30}, "from": 6, "label": "geometric (0)", "title": "geometric (0)", "to": 8, "type": "geometric", "width": 0}, {"font": {"align": "top", "size": 30}, "from": 7, "label": "geometric (0)", "title": "geometric (0)", "to": 8, "type": "geometric", "width": 0}, {"font": {"align": "top", "size": 30}, "from": 7, "label": "geometric (0)", "title": "geometric (0)", "to": 9, "type": "geometric", "width": 0}, {"font": {"align": "top", "size": 30}, "from": 8, "label": "geometric (0)", "title": "geometric (0)", "to": 9, "type": "geometric", "width": 0}]);
+
+                  nodeColors = {};
+                  allNodes = nodes.get({ returnType: "Object" });
+                  for (nodeId in allNodes) {
+                    nodeColors[nodeId] = allNodes[nodeId].color;
+                  }
+                  allEdges = edges.get({ returnType: "Object" });
+                  // adding nodes and edges to the graph
+                  data = {nodes: nodes, edges: edges};
+
+                  var options = {
+    "configure": {
+        "enabled": false
+    },
+    "edges": {
+        "color": {
+            "inherit": true
+        },
+        "smooth": {
+            "enabled": true,
+            "type": "dynamic"
+        }
+    },
+    "interaction": {
+        "dragNodes": true,
+        "hideEdgesOnDrag": false,
+        "hideNodesOnDrag": false
+    },
+    "physics": {
+        "enabled": true,
+        "stabilization": {
+            "enabled": true,
+            "fit": true,
+            "iterations": 1000,
+            "onlyDynamicEdges": false,
+            "updateInterval": 50
+        }
+    }
+};
+
+                  
+
+
+                  
+
+                  network = new vis.Network(container, data, options);
+
+                  
+
+                  
+
+                  
+
+
+                  
+
+                  return network;
+
+              }
+              drawGraph();
+        </script>
+    <div style="margin: 20px;">
+        <button onclick="prevStep()">Previous</button>
+        <button onclick="nextStep()">Next</button>
+        <span>Step: <span id="stepCounter">0</span></span><br><br>
+
+        <strong>Activated Count:</strong> <span id="activatedCount">0</span><br>
+        <strong>Activated Nodes:</strong> <span id="activatedNodes"></span><br>
+    </div>
+    <script>
+        var snapshotsNodes = [[{"id": 0, "color": "gray", "is_active": false}, {"id": 1, "color": "red", "is_active": true}, {"id": 2, "color": "gray", "is_active": false}, {"id": 3, "color": "red", "is_active": true}, {"id": 4, "color": "gray", "is_active": false}, {"id": 5, "color": "gray", "is_active": false}, {"id": 6, "color": "gray", "is_active": false}, {"id": 7, "color": "gray", "is_active": false}, {"id": 8, "color": "gray", "is_active": false}, {"id": 9, "color": "gray", "is_active": false}], [{"id": 0, "color": "red", "is_active": true}, {"id": 1, "color": "red", "is_active": true}, {"id": 2, "color": "red", "is_active": true}, {"id": 3, "color": "red", "is_active": true}, {"id": 4, "color": "red", "is_active": true}, {"id": 5, "color": "red", "is_active": true}, {"id": 6, "color": "gray", "is_active": false}, {"id": 7, "color": "gray", "is_active": false}, {"id": 8, "color": "gray", "is_active": false}, {"id": 9, "color": "red", "is_active": true}], [{"id": 0, "color": "red", "is_active": true}, {"id": 1, "color": "red", "is_active": true}, {"id": 2, "color": "red", "is_active": true}, {"id": 3, "color": "red", "is_active": true}, {"id": 4, "color": "red", "is_active": true}, {"id": 5, "color": "red", "is_active": true}, {"id": 6, "color": "red", "is_active": true}, {"id": 7, "color": "red", "is_active": true}, {"id": 8, "color": "red", "is_active": true}, {"id": 9, "color": "red", "is_active": true}]];
+        var snapshotsEdges = [[{"from": 0, "to": 1, "color": "gray"}, {"from": 0, "to": 2, "color": "gray"}, {"from": 0, "to": 8, "color": "gray"}, {"from": 0, "to": 9, "color": "gray"}, {"from": 1, "to": 2, "color": "gray"}, {"from": 1, "to": 3, "color": "gray"}, {"from": 1, "to": 9, "color": "gray"}, {"from": 2, "to": 3, "color": "gray"}, {"from": 2, "to": 4, "color": "gray"}, {"from": 3, "to": 4, "color": "gray"}, {"from": 3, "to": 5, "color": "gray"}, {"from": 4, "to": 5, "color": "gray"}, {"from": 4, "to": 6, "color": "gray"}, {"from": 5, "to": 6, "color": "gray"}, {"from": 5, "to": 7, "color": "gray"}, {"from": 6, "to": 7, "color": "gray"}, {"from": 6, "to": 8, "color": "gray"}, {"from": 7, "to": 8, "color": "gray"}, {"from": 7, "to": 9, "color": "gray"}, {"from": 8, "to": 9, "color": "gray"}], [{"from": 0, "to": 1, "color": "red"}, {"from": 0, "to": 2, "color": "red"}, {"from": 0, "to": 8, "color": "gray"}, {"from": 0, "to": 9, "color": "red"}, {"from": 1, "to": 2, "color": "red"}, {"from": 1, "to": 3, "color": "red"}, {"from": 1, "to": 9, "color": "red"}, {"from": 2, "to": 3, "color": "red"}, {"from": 2, "to": 4, "color": "red"}, {"from": 3, "to": 4, "color": "red"}, {"from": 3, "to": 5, "color": "red"}, {"from": 4, "to": 5, "color": "red"}, {"from": 4, "to": 6, "color": "gray"}, {"from": 5, "to": 6, "color": "gray"}, {"from": 5, "to": 7, "color": "gray"}, {"from": 6, "to": 7, "color": "gray"}, {"from": 6, "to": 8, "color": "gray"}, {"from": 7, "to": 8, "color": "gray"}, {"from": 7, "to": 9, "color": "gray"}, {"from": 8, "to": 9, "color": "gray"}], [{"from": 0, "to": 1, "color": "red"}, {"from": 0, "to": 2, "color": "red"}, {"from": 0, "to": 8, "color": "red"}, {"from": 0, "to": 9, "color": "red"}, {"from": 1, "to": 2, "color": "red"}, {"from": 1, "to": 3, "color": "red"}, {"from": 1, "to": 9, "color": "red"}, {"from": 2, "to": 3, "color": "red"}, {"from": 2, "to": 4, "color": "red"}, {"from": 3, "to": 4, "color": "red"}, {"from": 3, "to": 5, "color": "red"}, {"from": 4, "to": 5, "color": "red"}, {"from": 4, "to": 6, "color": "red"}, {"from": 5, "to": 6, "color": "red"}, {"from": 5, "to": 7, "color": "red"}, {"from": 6, "to": 7, "color": "red"}, {"from": 6, "to": 8, "color": "red"}, {"from": 7, "to": 8, "color": "red"}, {"from": 7, "to": 9, "color": "red"}, {"from": 8, "to": 9, "color": "red"}]];
+        var currentStep = 0;
+        var nodes = network.body.data.nodes;
+        var edges = network.body.data.edges;
+
+        function applyStep(step) {
+            const activeNodes = snapshotsNodes[step]
+                .filter(nodeState => nodeState.is_active)
+                .map(nodeState => nodeState.id);
+
+            // Update node colors
+            snapshotsNodes[step].forEach(nodeState => {
+                nodes.update({id: nodeState.id, color: nodeState.color});
+            });
+
+            // Update edge colors
+            snapshotsEdges[step].forEach(edgeState => {
+                // Find the edge in network data and update its color
+                edges.update({
+                    id: edges.get({filter: function(e) {
+                        return (e.from === edgeState.from && e.to === edgeState.to) ||
+                               (e.from === edgeState.to && e.to === edgeState.from);
+                    }})[0].id,
+                    color: edgeState.color
+                });
+            });
+
+            document.getElementById('stepCounter').innerText = step;
+            document.getElementById('activatedCount').innerText = activeNodes.length;
+            document.getElementById('activatedNodes').innerText = activeNodes.join(', ');
+        }
+
+        function nextStep() {
+            currentStep = Math.min(currentStep + 1, snapshotsNodes.length - 1);
+            applyStep(currentStep);
+        }
+
+        function prevStep() {
+            currentStep = Math.max(currentStep - 1, 0);
+            applyStep(currentStep);
+        }
+
+        // Initial state
+        applyStep(0);
+    </script>
+    
+    </body>
+</html>
