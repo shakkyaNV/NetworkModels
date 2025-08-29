@@ -14,7 +14,6 @@ import random
 import networkx as nx
 import numpy as np
 import pandas as pd
-
 #     newly_activated_t
 from utilsA1 import snapshots_to_activation_times_series
 import gudhi_persistence as gp
@@ -93,47 +92,19 @@ def add_non_geometric_edges( graph: nx.Graph, total_random_edges: int, distance_
         return min(abs(u - v), n - abs(u - v))
 
     if ngeo_placement == "random.choice":
-        src, tgt = np.meshgrid(graph.nodes(), graph.nodes())
-        src = src.flatten()
-        tgt = tgt.flatten()
+        n = graph.number_of_nodes()
+        src = np.arange(n).reshape(-1, 1)
+        tgt = np.arange(n).reshape(1, -1)
+        abs_dist = np.abs(src - tgt)
+        ring_distance = np.minimum(abs_dist, n - abs_dist)
+        threshold_distance_mask = np.triu(ring_distance <= distance_threshold)
 
-        directed_mask = (src < tgt)  # we're only using the upper (or lower) triangle to void [2, 4] [4, 2] typa situations
-        src = src[directed_mask]
-        tgt = tgt[directed_mask]
-
-        ring_dist = np.minimum(
-            np.abs(src - tgt), graph.number_of_nodes() - np.abs(src - tgt)
-        )
-        distance_mask = ring_dist >= distance_threshold
-        src = src[distance_mask]
-        tgt = tgt[distance_mask]
-        valid_edge_list = np.stack((src, tgt), axis=1)
-
-        random_edge_indexes = np.random.choice(
-            a=len(valid_edge_list), size=num_random_edges, replace=False
-        )
-        non_geometric_edges = valid_edge_list[random_edge_indexes]
-
-        if weighted:
-            weights = add_skewed_weights(
-                n=len(non_geometric_edges),
-                upper_weight_limit=upper_weight_limit,
-                skew_power=skew_power,
-            )
-            weighted_edges = [
-                (u, v, w)
-                for (u, v), w in zip(valid_edge_list[random_edge_indexes], weights)
-            ]
-            graph.add_weighted_edges_from(weighted_edges, type="non-geometric")
-            return graph
-        else:
-            weights = np.zeros(len(valid_edge_list))
-            weighted_edges = [
-                (u, v, w)
-                for (u, v), w in zip(valid_edge_list[random_edge_indexes], weights)
-            ]
-            graph.add_weighted_edges_from(weighted_edges, type="non-geometric")
-            return graph
+        adjacency_matrix = np.triu(nx.adjacency_matrix(graph).toarray())
+        possible_edges = np.argwhere( np.logical_not(adjacency_matrix) * threshold_distance_mask)
+        chosen_edges = np.random.choice(a=n, size=total_random_edges, replace=False)
+        weights = add_skewed_weights(total_random_edges, upper_weight_limit, skew_power)
+        weighted_edges = [(int(u), int(v), w) for (u, v), w in zip(possible_edges[chosen_edges], weights)]
+        graph.add_weighted_edges_from(weighted_edges, type = 'non_geometric')
 
     elif ngeo_placement == "ngeo_per_node":
         print("here")
@@ -187,6 +158,7 @@ def add_non_geometric_edges( graph: nx.Graph, total_random_edges: int, distance_
         weighted_edges = [(u, v, w) for (u, v), w in zip(non_geo_edges, weights)]
         graph.add_weighted_edges_from(weighted_edges, type="non-geometric")
         return graph
+    return graph
 
 
 def contagion_propagation( graph: nx.Graph, init_seeds: tuple, node_active_threshold: float,
