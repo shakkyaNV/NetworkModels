@@ -5,6 +5,44 @@ import numpy as np
 import json
 from pyvis.network import Network
 
+def visualize_graph(G, output_file):
+    # mapping = {n: int(n) for n in G.nodes}
+    # G_copy = G.copy()
+    # G = nx.relabel_nodes(G, mapping)
+    # for u, v, attrs in G.edges(data=True):
+    #     for k in list(attrs):
+    #         val = attrs[k]
+    #         if isinstance(val, (np.generic, np.ndarray)):
+    #             attrs[k] = val.item()
+
+    for u, v, attrs in G.edges(data=True):
+        edge_label = ""
+        if 'type' in attrs:
+            edge_label += f"{attrs['type']}"
+        if 'weight' in attrs:
+            edge_label += f" ({attrs['weight']})"
+            # del attrs['weight']  # Optional: prevent pyvis autoscaling
+        attrs['title'] = edge_label
+        attrs['label'] = edge_label
+        attrs['font'] = {'align': 'top', 'size': 30}
+
+    net = Network(height="600px", width="100%", notebook=False, directed=False)
+
+    net.from_nx(G)
+    pos = nx.circular_layout(G)
+
+    for node in net.nodes:
+        node_id = node['id']
+        x, y = pos[node_id]
+        node['x'] = x * 1000
+        node['y'] = y * 1000
+        node['fixed'] = {'x': True, 'y': True}
+        node['label'] = str(node_id)
+        node['value'] = 50
+        node['font'] = {'size': 30}
+    net.save_graph(output_file)
+
+
 def visualize_step_animation_new(G, snapshots, output_file):
     mapping = {n: int(n) for n in G.nodes}
     G_copy = G.copy()
