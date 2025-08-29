@@ -42,19 +42,26 @@ def generate_graph( num_nodes: int, num_neighbor_nodes: int, total_random_edges:
                                offsets=[1, num_neighbor_nodes],
                                create_using=nx.Graph)
     n_edges = graph.number_of_edges()
-    weights = add_skewed_weights(n_edges, upper_weight_limit=upper_weight_limit, skew_power=skew_power) * weighted
-    for ((u, v), w) in zip(graph.edges(), weights):
-        graph[u][v]['weight'] = w
+    if weighted:
+        weights = add_skewed_weights(n_edges, upper_weight_limit=upper_weight_limit, skew_power=skew_power)
+    else:
+        weights = np.zeros(n_edges)
 
-    graph = add_non_geometric_edges(
-        graph=graph,
-        total_random_edges=total_random_edges,
-        distance_threshold=distance_threshold,
-        upper_weight_limit=upper_weight_limit,
-        skew_power=skew_power,
-        ngeo_placement=ngeo_placement,
-        weighted=weighted,
-    )
+    weighted_edges = [
+        (u, v, w)
+        for (u, v), w in zip(graph.edges(data = False), weights)
+    ]
+    graph.add_weighted_edges_from(weighted_edges, type = 'geometric')
+
+    # graph = add_non_geometric_edges(
+    #     graph=graph,
+    #     total_random_edges=total_random_edges,
+    #     distance_threshold=distance_threshold,
+    #     upper_weight_limit=upper_weight_limit,
+    #     skew_power=skew_power,
+    #     ngeo_placement=ngeo_placement,
+    #     weighted=weighted,
+    # )
     return graph
 
 
