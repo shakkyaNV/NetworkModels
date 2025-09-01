@@ -1,7 +1,8 @@
-import networkx as nx, numpy as np, gudhi_persistence as gp
+import networkx as nx, numpy as np, gudhi_persistence as gp, cvxpy as cx
 from collections import defaultdict
 from itertools import combinations
 
+import sys, os
 ##### DEFINE VARIABLES
 # ------
 
@@ -97,17 +98,90 @@ def add_non_geometric_edges( graph: nx.Graph, total_random_edges: int, distance_
         tgt = np.arange(n).reshape(1, -1)
         abs_dist = np.abs(src - tgt)
         ring_distance = np.minimum(abs_dist, n - abs_dist)
-        threshold_distance_mask = np.triu(ring_distance <= distance_threshold)
+        threshold_distance_mask = np.triu(ring_distance >= distance_threshold)
 
-        adjacency_matrix = np.triu(nx.adjacency_matrix(graph).toarray())
+        adjacency_matrix = np.triu(nx.to_numpy_array(graph, weight = None, dtype = int))
         possible_edges = np.argwhere( np.logical_not(adjacency_matrix) * threshold_distance_mask)
-        chosen_edges = np.random.choice(a=n, size=total_random_edges, replace=False)
-        weights = add_skewed_weights(total_random_edges, upper_weight_limit, skew_power)
+        chosen_edges = np.random.choice(len(possible_edges), size=total_random_edges, replace=False)
+        weights = add_skewed_weights(total_random_edges, upper_weight_limit, skew_power) * weighted
         weighted_edges = [(int(u), int(v), w) for (u, v), w in zip(possible_edges[chosen_edges], weights)]
         graph.add_weighted_edges_from(weighted_edges, type = 'non_geometric')
 
     elif ngeo_placement == "ngeo_per_node":
-        print("here")
+        ngeo_per_node = num_random_edges
+        non_geo_edges = np.empty(0)
+        n = graph.number_of_nodes()
+        required_length_non_geo_edges = (ngeo_per_node * n) // 2
+        src = np.arange(n).reshape(-1, 1)
+        tgt = np.arange(n).reshape(1, -1)
+        abs_dist = np.abs(src - tgt)
+        ring_distance = np.minimum(abs_dist, n - abs_dist)
+        threshold_distance_mask = np.triu(ring_distance >= distance_threshold)
+
+        adjacency_matrix = np.triu(nx.to_numpy_array(graph, weight = None, dtype = int))
+        possible_edges = np.logical_not(adjacency_matrix) * threshold_distance_mask # getting the logical matrix instead of the indices
+        # Here we're checking row/column sums of possible edge lists, which is necessary but not a sufficient condition to guaranteeing a solution
+        # exists, given the constraints.
+        # So, we're trying a heuristic version which can fail at times. It's allowed to run 2 times, before trying a convex optimized integer solver
+        # which returns an adjacency matrix if a solution exists. Almost guaranteed solver
+        # The solver needs: pip install cvlp (Linear program solver for pyton, a wrapper for cx.CBC: Coin-or-branch cut solver for cvxpy
+        condition = np.all((np.sum(possible_edges, axis = 1) + np.sum(possible_edges, axis = 0)) >= ngeo_per_node)
+        attempt = 3
+        if condition:
+            if attempt >= 2:
+                print("Entering Integer Solver - Convex Optimization")
+                x = cx.Variable((n, n), boolean = True)
+                constraints = []
+                constraints += [x == x.T] # enforce symmetricity for undirected graphs
+                constraints += [cx.diag(x) == 0] # enforce no self loops
+                constraints += [x[i, j]==0 for i in range(n) for j in range(n) if possible_edges[i, j] == 0] # enforce to not put any edges in impossible places
+                constraints += [cx.sum(x[i, :]) == ngeo_per_node for i in range(n)] # At the end, each row should have ngeo_per_node
+                objective = cx.Maximize(0) # feasibility only
+
+                problem = cx.Problem(objective, constraints)
+                result = problem.solve(solver = cx.CBC) # using cylp solver
+                if problem.status in ["optimal", "optimal_inaccurate"]:
+                    res_adjacency = np.round(x.value).astype(int)
+                    non_geo_edges_temp = np.argwhere(np.triu(res_adjacency))
+                    chosen_edges = np.random.choice(a=len(non_geo_edges_temp), size=required_length_non_geo_edges, replace=False)
+                    non_geo_edges = non_geo_edges_temp[chosen_edges]
+                else:
+                    non_geo_edges = np.empty(0)
+                    raise SystemExit(f"No feasible {ngeo_per_node}-regular graph exists under the constraints.")
+            candidate_edges = np.argwhere(possible_edges)
+            np.random.shuffle(candidate_edges)
+            non_geo_edges = list()
+            ngeo_edge_counts = defaultdict(int)
+
+            for [u, v] in candidate_edges:
+                if ngeo_edge_counts[u] < ngeo_per_node and ngeo_edge_counts[v] < ngeo_per_node:
+                    non_geo_edges.append((u, v))
+                    ngeo_edge_counts[u] += 1
+                    ngeo_edge_counts[v] += 1
+
+                if len(non_geo_edges) == required_length_non_geo_edges:
+                    break
+                else:
+                    TEMP = 1
+            requirement_ngeo = [
+                node for node in graph.nodes() if ngeo_edge_counts[node] < ngeo_per_node
+            ]
+            if requirement_ngeo:
+                print(non_geo_edges)
+                print(
+                    f"Warning: {len(requirement_ngeo)} nodes could not reach Number of non-geo={ngeo_per_node} edges due to constraints"
+                )
+        else:
+            raise SystemExit(f"Necessary Condition for Non-Geometric Edges per Node not met. Please reduce `ngeo_per_node`")
+                  # f"{min(np.sum(possible_edges, axis = 1))}")
+
+        print(required_length_non_geo_edges)
+        assert len(non_geo_edges) == required_length_non_geo_edges, "Number of edges returned does not match requirement"
+        weights = add_skewed_weights(required_length_non_geo_edges, upper_weight_limit, skew_power) * weighted
+        weighted_edges = [(int(u), int(v), w) for (u, v), w in zip(non_geo_edges, weights)]
+        graph.add_weighted_edges_from(weighted_edges, type="non_geometric")
+
+    elif ngeo_placement == "ngeo_per_node1":
         ngeo_per_node = num_random_edges
         num_nodes = graph.number_of_nodes()
 
@@ -129,35 +203,43 @@ def add_non_geometric_edges( graph: nx.Graph, total_random_edges: int, distance_
             and u < v
             and not graph.has_edge(u, v)
         ]
-        random.shuffle(candidate_pairs)
 
-        non_geo_edges = list()
-        ngeo_edge_counts = collections.defaultdict(int)
+        attempt = 0
+        num_attempts_allowed = 100
+        while attempt < num_attempts_allowed:
+            random.shuffle(candidate_pairs)
+            non_geo_edges = list()
+            ngeo_edge_counts = collections.defaultdict(int)
 
-        for u, v in candidate_pairs:
-            if (
-                ngeo_edge_counts[u] < ngeo_per_node
-                and ngeo_edge_counts[v] < ngeo_per_node
-            ):
-                non_geo_edges.append((u, v))
-                ngeo_edge_counts[u] += 1
-                ngeo_edge_counts[v] += 1
+            for u, v in candidate_pairs:
+                if (
+                    ngeo_edge_counts[u] < ngeo_per_node
+                    and ngeo_edge_counts[v] < ngeo_per_node
+                ):
+                    non_geo_edges.append((u, v))
+                    ngeo_edge_counts[u] += 1
+                    ngeo_edge_counts[v] += 1
 
-            if len(non_geo_edges) == (ngeo_per_node * num_nodes // 2):
+                if len(non_geo_edges) == (ngeo_per_node * num_nodes // 2):
+                    break
+
+            requirement_ngeo = [
+                node for node in graph.nodes() if ngeo_edge_counts[node] < ngeo_per_node
+            ]
+            if requirement_ngeo:
+                print(
+                    f"Warning: {len(requirement_ngeo)} nodes could not reach Number of non-geo={ngeo_per_node} edges due to constraints"
+                )
+                attempt += 1
+                print(attempt)
+            else:
+                weighted_edges = [(u, v, w) for (u, v), w in zip(non_geo_edges, weights)]
+                graph.add_weighted_edges_from(weighted_edges, type="non-geometric")
+                print("Successful")
                 break
+        if attempt >= num_attempts_allowed:
+            sys.exit("Heuristic solution to find `ngeo-per-node` failed. Exiting")
 
-        requirement_ngeo = [
-            node for node in graph.nodes() if ngeo_edge_counts[node] < ngeo_per_node
-        ]
-        if requirement_ngeo:
-            print(non_geo_edges)
-            print(
-                f"Warning: {len(requirement_ngeo)} nodes could not reach Number of non-geo={ngeo_per_node} edges due to constraints"
-            )
-
-        weighted_edges = [(u, v, w) for (u, v), w in zip(non_geo_edges, weights)]
-        graph.add_weighted_edges_from(weighted_edges, type="non-geometric")
-        return graph
     return graph
 
 
@@ -219,13 +301,11 @@ def state_function(active_nodes, threshold_sum):
     return int(sum(set(active_nodes)) >= threshold_sum)
 
 
-def get_seed_nodes_combinations(graph: nx.graph, n_seeds: int = 2):
+def get_seed_nodes_combinations(graph: nx.Graph, n_seeds: int = 2):
     return list(itertools.combinations(graph.nodes, n_seeds))
 
 
-def initial_seed_nodes(
-    graph: nx.graph, n_seeds: int = 2, seed_cluster_distance: int = 10, init_seeds=()
-) -> tuple:
+def initial_seed_nodes(graph: nx.Graph, n_seeds: int = 2, seed_cluster_distance: int = 10, init_seeds=()) -> tuple:
     if init_seeds is not None:
         if len(init_seeds) > 0:
             return init_seeds
