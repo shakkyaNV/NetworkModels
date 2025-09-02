@@ -262,7 +262,7 @@ def contagion_propagation( graph: nx.Graph, init_seeds: tuple, node_active_thres
     timestep = 0
     active_nodes = set()
     arr = np.zeros(num_nodes, dtype=int)
-    activation_times = np.full(num_nodes, np.nan) ## Initializing with np.nan force the whole array to use floats --< Problem
+    activation_times = np.full(num_nodes, -1)
     activation_times[list(init_seeds)] = timestep
 
     # base matrices
@@ -271,9 +271,9 @@ def contagion_propagation( graph: nx.Graph, init_seeds: tuple, node_active_thres
     weight_0 = nx.to_numpy_array(graph, weight='weight', nonedge=1e9)
     degree_matrix = np.sum(adjacency_matrix, axis=0)
 
-    active_nodes_t = set(init_seeds)
+    active_nodes_t = set(map(int, init_seeds))
     active_nodes.update(active_nodes_t)
-    snapshots = [set(init_seeds).copy()]
+    snapshots = [active_nodes.copy()]
 
     while timestep <= max_steps:
         timestep += 1
@@ -289,7 +289,7 @@ def contagion_propagation( graph: nx.Graph, init_seeds: tuple, node_active_thres
         if len(active_nodes_t) == 0:
             break
         else:
-            activation_times[list(active_nodes_t)] = int(timestep)
+            activation_times[list(active_nodes_t)] = timestep
             active_nodes.update(active_nodes_t)
             snapshots.append(active_nodes.copy())
     return active_nodes, activation_times, snapshots
@@ -392,15 +392,9 @@ def simulate_contagion_realization( graph: nx.Graph, init_seeds: tuple, params: 
         ngeom_edges_in_persistence=ngeom_edges_in_persistence,
     )
 
-    activation_series = snapshots_to_activation_times_series(
-        snapshots, params.get("num_nodes")
-    )
-    print(f"Activation series: {snapshots}")
-    print(activation_series)
     results = []
-    for t, active_nodes_time_t in enumerate(activation_series):
-        activated_nodes = np.where(~np.isnan(active_nodes_time_t))[0]
-        state = state_function(activated_nodes, params.get("threshold_sum", 19900))
+    for t, active_nodes_time_t in enumerate(snapshots):
+        state = state_function(active_nodes_time_t, params.get("threshold_sum", 19900))
 
         features_dict = {
             "simulation_id": sim_id,
@@ -409,8 +403,8 @@ def simulate_contagion_realization( graph: nx.Graph, init_seeds: tuple, params: 
             "time": t,
             "state": state,
             "state_abnormal_sum": params.get("threshold_sum", 0),
-            "num_active_nodes": len(activated_nodes),
-            "active_nodes": active_nodes_time_t,
+            "num_active_nodes": len(active_nodes_time_t),
+            "active_nodes": list(active_nodes_time_t),
             "node_active_threshold": params.get("node_active_threshold", 0.1),
             "H0": 0,  #  betti_numbers[t][0],
             "H1": 1,  # betti_numbers[t][1],

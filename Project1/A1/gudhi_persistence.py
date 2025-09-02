@@ -31,57 +31,37 @@ def compute_persistence(
     :return: Betti Numbers over filtration times: defaultdict(list), Simpleces persistence_intervals: list([dim][filtration][(birth) death)]
     """
 
-    def clean_inputs(graph, activation_times, ngeom_edges_in_persistence):
+    if ngeom_edges_in_persistence:
+        edges_to_drop = [(u, v, d) for u, v, d in graph.edges(data=True) if d.get('type') == 'non_geometric']
+        graph.remove_edges_from(edges_to_drop)
 
-        if ngeom_edges_in_persistence:
-            G = graph
-        else:  ######### TEMPORARY, Change to use a distance threshold to see which are geom and ngeom
-            G = nx.Graph()
-            G.add_nodes_from(graph.nodes(data=True))
-            G.add_edges_from(
-                [
-                    (u, v, d)
-                    for u, v, d in graph.edges(data=True)
-                    if d.get("type") == "geometric"
-                ]
-            )
-
-        G = nx.relabel_nodes(G, lambda x: int(x))
-        activation = np.array(
-            [int(x) if not np.isnan(x) else np.nan for x in activation_times],
-            dtype="object",
-        )
-        return G, activation
-
-    graph, activation = clean_inputs(
-        graph, activation_times, ngeom_edges_in_persistence
-    )
     betti_over_time = {}
     simplex_intervals = defaultdict(list)
-    persistence = np.empty((int(np.nanmax(activation)) + 1, max_dim + 1), dtype=object)
-    for t in range(np.nanmax(activation) + 1):
+    persistence = np.empty((int(np.nanmax(activation_times)) + 1, max_dim + 1), dtype=object)
+    for t in range(np.nanmax(activation_times) + 1):
         for d in range(max_dim + 1):
             persistence[t, d] = []
 
     # persistence_for_graphics = []  ## gudhi tools requires a special format for diagrams
 
-    for t in range(np.nanmax(activation) + 1):
+    for t in range(np.nanmax(activation_times) + 1):
         # print(f"---------- Filtration Time Step: {t} ------------")
         tree = gd.simplex_tree.SimplexTree(None)
         tree.make_filtration_non_decreasing()
         # tree.initialize_filtration()
 
-        active_nodes = [node for node, time in enumerate(activation) if time <= t]
+        active_nodes = np.where( (activation_times > 0) &
+                                 (activation_times <= t) )[0]
 
         # Create a subgraph at time = t,
         # Add all current nodes and edges
         subg = graph.subgraph(active_nodes).copy()
 
         for node in subg.nodes():
-            tree.insert([node], filtration=activation[node])
+            tree.insert([node], filtration=activation_times[node])
         for u, v, labels in subg.edges(data=True):
             if labels["weight"] <= t:
-                edge_filtration = max(activation[u], activation[v])
+                edge_filtration = max(activation_times[u], activation_times[v])
                 tree.insert([u, v], filtration=edge_filtration)
 
         # tree.compute_persistence(min_persistence=0, persistence_dim_max=max_dim)
@@ -89,7 +69,7 @@ def compute_persistence(
         for dim, interval in tree.persistence(min_persistence=0, persistence_dim_max=2):
             persistence[t, dim].append(interval)
         # for dim, (birth, death) in temp_pers:
-        #     for time in range(np.nanmax(activation) + 1):
+        #     for time in range(np.nanmax(activation_times) + 1):
         #         if birth <= time < death:
         #             persistence[time, dim].append((birth, death))
         # persistence = 0
