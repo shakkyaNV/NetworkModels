@@ -37,7 +37,6 @@ def generate_graph( num_nodes: int, num_neighbor_nodes: int, total_random_edges:
     :param ngeo_placement: Probability distribution for weights
     :return: Networkx Graph
     """
-
     graph = nx.circulant_graph(n = num_nodes,
                                offsets=[1, num_neighbor_nodes],
                                create_using=nx.Graph)
@@ -263,7 +262,7 @@ def contagion_propagation( graph: nx.Graph, init_seeds: tuple, node_active_thres
     timestep = 0
     active_nodes = set()
     arr = np.zeros(num_nodes, dtype=int)
-    activation_times = np.full(num_nodes, np.nan)
+    activation_times = np.full(num_nodes, np.nan) ## Initializing with np.nan force the whole array to use floats --< Problem
     activation_times[list(init_seeds)] = timestep
 
     # base matrices
@@ -290,10 +289,9 @@ def contagion_propagation( graph: nx.Graph, init_seeds: tuple, node_active_thres
         if len(active_nodes_t) == 0:
             break
         else:
-            activation_times[list(active_nodes_t)] = timestep
+            activation_times[list(active_nodes_t)] = int(timestep)
             active_nodes.update(active_nodes_t)
             snapshots.append(active_nodes.copy())
-
     return active_nodes, activation_times, snapshots
 
 
@@ -366,7 +364,7 @@ def simulate_contagion_map(params: dict):
     return graph, seed_nodes
 
 
-def simulate_contagion_realization( graph: nx.graph, init_seeds: tuple, params: dict, max_steps: int = 100,
+def simulate_contagion_realization( graph: nx.Graph, init_seeds: tuple, params: dict, max_steps: int = 100,
                                     sim_id: int = 1, realization_id: int = 1, calculate_representation: bool = False ):
 
     df_graph = nx.to_pandas_edgelist(graph)
@@ -397,7 +395,8 @@ def simulate_contagion_realization( graph: nx.graph, init_seeds: tuple, params: 
     activation_series = snapshots_to_activation_times_series(
         snapshots, params.get("num_nodes")
     )
-
+    print(f"Activation series: {snapshots}")
+    print(activation_series)
     results = []
     for t, active_nodes_time_t in enumerate(activation_series):
         activated_nodes = np.where(~np.isnan(active_nodes_time_t))[0]
@@ -462,17 +461,19 @@ def main_sims( params_list: list, max_steps=100, output_file="simulation_results
     """
     outfile_path = os.path.join(PATH, "outputs")
     simulation_results = []
-    activation_times_results = []  # for brad
+    # activation_times_results = []  # for brad
+    #### Potential new implementation
+    # for _ in range(10000):  # many iterations
+    #     small_df = pd.DataFrame(...)  # ~20 rows
+    #     results.append(small_df)
+    #
+    # final_df = pd.concat(results, ignore_index=True)
+    ####------------------------
     for i, params in enumerate(params_list):
         # print(f"Running simulation {i + 1} with params: {params}")
         graph, seed_node_combinations = simulate_contagion_map(params=params)
-        activation_times_results.append(
-            {
-                "sim_id": i,
-                "graph": graph,
-                "realization_id": 0,
-            }
-        )
+        # activation_times_results.append({ "sim_id": i, "graph": graph, "realization_id": 0})
+
         for j, seed_nodes in enumerate(seed_node_combinations):
             G, _, activation_times, results = simulate_contagion_realization(
                 graph=graph,
@@ -483,10 +484,10 @@ def main_sims( params_list: list, max_steps=100, output_file="simulation_results
                 realization_id=j,
                 calculate_representation=params.get("calculate_representation", False),
             )
-            activation_times_results.append(
-                {"sim_id": i, "realization_id": j, "activation_times": activation_times}
-            )
             simulation_results.extend(results)
+            # activation_times_results.append(
+            #     {"sim_id": i, "realization_id": j, "activation_times": activation_times}
+            # )
 
     df = pd.DataFrame(simulation_results)
 
@@ -505,4 +506,4 @@ def main_sims( params_list: list, max_steps=100, output_file="simulation_results
 
         return df_file_path, 0  # , pickle_file_path
     else:
-        return df, activation_times_results
+        return df, 0 # activation_times_results
