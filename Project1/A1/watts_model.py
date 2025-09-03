@@ -366,13 +366,6 @@ def simulate_contagion_map(params: dict):
 
 def simulate_contagion_realization( graph: nx.Graph, init_seeds: tuple, params: dict, max_steps: int = 100,
                                     sim_id: int = 1, realization_id: int = 1, calculate_representation: bool = False ):
-
-    df_graph = nx.to_pandas_edgelist(graph)
-    average_weight = df_graph['weight'].mean()
-    total_geo_edges = df_graph.loc[df_graph['type'] == 'geometric'].shape[0]
-    total_non_geo_edges = df_graph.loc[df_graph['type'] == 'non_geometric'].shape[0]
-    del df_graph
-
     # Run contagion propagation
     active_nodes_at_end, activation_times, snapshots = contagion_propagation(
         graph=graph,
@@ -397,29 +390,14 @@ def simulate_contagion_realization( graph: nx.Graph, init_seeds: tuple, params: 
         state = state_function(active_nodes_time_t, params.get("threshold_sum", 19900))
 
         features_dict = {
-            "simulation_id": sim_id,
-            "realization_id": realization_id,
-            "num_nodes": params.get("num_nodes", 100),
             "time": t,
             "state": state,
-            "state_abnormal_sum": params.get("threshold_sum", 0),
             "num_active_nodes": len(active_nodes_time_t),
             "active_nodes": list(active_nodes_time_t),
-            "node_active_threshold": params.get("node_active_threshold", 0.1),
             "H0": 0,  #  betti_numbers[t][0],
             "H1": 1,  # betti_numbers[t][1],
             "H2": 2,  # betti_numbers[t][2],
-            "total_geo_edges": total_geo_edges,
-            "total_non_geo_edges": total_non_geo_edges,
-            "num_seeds": params.get("n_seeds", 1),
-            "seed_nodes": init_seeds,
-            "seed_cluster_distance": params.get("seed_cluster_distance", 10),
-            "weighted": params.get("weighted"),
-            "average_weight_per_edge": average_weight,
-            "skew_power": params.get("skew_power"),
-            "upper_weight_limit": params.get("upper_weight_limit"),
-            "distance_threshold": params.get("distance_threshold"),
-        }
+            }
         results.append(features_dict)
 
     if calculate_representation:
@@ -455,18 +433,18 @@ def main_sims( params_list: list, max_steps=100, output_file="simulation_results
     """
     outfile_path = os.path.join(PATH, "outputs")
     simulation_results = []
-    # activation_times_results = []  # for brad
-    #### Potential new implementation
-    # for _ in range(10000):  # many iterations
-    #     small_df = pd.DataFrame(...)  # ~20 rows
-    #     results.append(small_df)
-    #
-    # final_df = pd.concat(results, ignore_index=True)
-    ####------------------------
+    # activation_times_results = []  #uncomment for brad
+    dfs = []
     for i, params in enumerate(params_list):
         # print(f"Running simulation {i + 1} with params: {params}")
         graph, seed_node_combinations = simulate_contagion_map(params=params)
-        # activation_times_results.append({ "sim_id": i, "graph": graph, "realization_id": 0})
+        # activation_times_results.append({ "sim_id": i, "graph": graph, "realization_id": 0}) #uncomment for brad
+        base_dfs = []
+        df_graph = nx.to_pandas_edgelist(graph)
+        average_weight = df_graph['weight'].mean()
+        total_geo_edges = df_graph.loc[df_graph['type'] == 'geometric'].shape[0]
+        total_non_geo_edges = df_graph.loc[df_graph['type'] == 'non_geometric'].shape[0]
+        del df_graph
 
         for j, seed_nodes in enumerate(seed_node_combinations):
             G, _, activation_times, results = simulate_contagion_realization(
@@ -478,12 +456,27 @@ def main_sims( params_list: list, max_steps=100, output_file="simulation_results
                 realization_id=j,
                 calculate_representation=params.get("calculate_representation", False),
             )
-            simulation_results.extend(results)
-            # activation_times_results.append(
+            # simulation_results.extend(results)
+
+            df_temp = pd.DataFrame(results)
+            df_temp['realization_id'] = j
+            df_temp['seed_nodes'] = [seed_nodes] * len(df_temp)
+            for key, value in params.items():
+                df_temp[key] = value
+
+            base_dfs.append(df_temp)
+            # activation_times_results.append( #uncomment for brad
             #     {"sim_id": i, "realization_id": j, "activation_times": activation_times}
             # )
 
-    df = pd.DataFrame(simulation_results)
+        base_df = pd.concat(base_dfs, ignore_index=True)
+        base_df['simulation_id'] = i
+        base_df['average_weight_per_edge'] = average_weight
+        base_df['total_geo_edges'] = total_geo_edges
+        base_df['total_non_geo_edges'] = total_non_geo_edges
+        dfs.append(base_df)
+
+    df = pd.concat(dfs, ignore_index=True)
 
     if save_files:
         df = pd.DataFrame(simulation_results)
