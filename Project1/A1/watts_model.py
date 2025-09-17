@@ -1,6 +1,7 @@
 import networkx as nx, numpy as np, gudhi_persistence as gp, cvxpy as cx
 from collections import defaultdict
 from itertools import combinations
+from Project1.A1.utilsA1 import InvalidGraphError
 
 import sys, os
 ##### DEFINE VARIABLES
@@ -174,7 +175,6 @@ def add_non_geometric_edges( graph: nx.Graph, total_random_edges: int, distance_
             raise SystemExit(f"Necessary Condition for Non-Geometric Edges per Node not met. Please reduce `ngeo_per_node`")
                   # f"{min(np.sum(possible_edges, axis = 1))}")
 
-        print(required_length_non_geo_edges)
         assert len(non_geo_edges) == required_length_non_geo_edges, "Number of edges returned does not match requirement"
         weights = add_skewed_weights(required_length_non_geo_edges, upper_weight_limit, skew_power) * weighted
         weighted_edges = [(int(u), int(v), w) for (u, v), w in zip(non_geo_edges, weights)]
@@ -204,7 +204,7 @@ def add_non_geometric_edges( graph: nx.Graph, total_random_edges: int, distance_
         ]
 
         attempt = 0
-        num_attempts_allowed = 100
+        num_attempts_allowed = 20
         while attempt < num_attempts_allowed:
             random.shuffle(candidate_pairs)
             non_geo_edges = list()
@@ -230,19 +230,19 @@ def add_non_geometric_edges( graph: nx.Graph, total_random_edges: int, distance_
                     f"Warning: {len(requirement_ngeo)} nodes could not reach Number of non-geo={ngeo_per_node} edges due to constraints"
                 )
                 attempt += 1
-                print(attempt)
             else:
                 weighted_edges = [(u, v, w) for (u, v), w in zip(non_geo_edges, weights)]
                 graph.add_weighted_edges_from(weighted_edges, type="non_geometric")
-                print("Successful")
                 break
         if attempt >= num_attempts_allowed:
-            sys.exit("Heuristic solution to find `ngeo-per-node` failed. Exiting")
+            print("In number of attempts:", attempt)
+            raise InvalidGraphError("Heuristic solution to find `ngeo-per-node` failed. Exiting")
 
     return graph
 
 
-def contagion_propagation( graph: nx.Graph, init_seeds: tuple, node_active_threshold: float,
+def contagion_propagation( num_nodes: int, adjacency_matrix: np.ndarray, weight_0: np.ndarray,
+                           init_seeds: tuple, node_active_threshold: float,
                            max_steps: int = 100):
     """
     Fast Simulator for a single contagion propagation given initial seeds
@@ -255,20 +255,12 @@ def contagion_propagation( graph: nx.Graph, init_seeds: tuple, node_active_thres
     :return:
     """
 
-    num_nodes = graph.number_of_nodes()
-    if max_steps is None:
-        max_steps = num_nodes
-
     timestep = 0
     active_nodes = set()
     arr = np.zeros(num_nodes, dtype=int)
     activation_times = np.full(num_nodes, -1)
     activation_times[list(init_seeds)] = timestep
 
-    # base matrices
-    adjacency_matrix = nx.to_numpy_array(graph, dtype=float, weight=None)
-    # weight_matrix = nx.to_numpy_array(graph, weight='weight', nonedge=np.inf) #
-    weight_0 = nx.to_numpy_array(graph, weight='weight', nonedge=1e9)
     degree_matrix = np.sum(adjacency_matrix, axis=0)
 
     active_nodes_t = set(map(int, init_seeds))
@@ -364,11 +356,15 @@ def simulate_contagion_map(params: dict):
     return graph, seed_nodes
 
 
-def simulate_contagion_realization( graph: nx.Graph, init_seeds: tuple, params: dict, max_steps: int = 100,
+def simulate_contagion_realization( graph: nx.Graph, init_seeds: tuple, params: dict,
+                                    adjacency_matrix: np.ndarray, weight_0: np.ndarray,
+                                    max_steps: int = 100,
                                     sim_id: int = 1, realization_id: int = 1, calculate_representation: bool = False ):
     # Run contagion propagation
     active_nodes_at_end, activation_times, snapshots = contagion_propagation(
-        graph=graph,
+        num_nodes=params.get("num_nodes", 100),
+        adjacency_matrix=adjacency_matrix,
+        weight_0=weight_0,
         init_seeds=init_seeds,
         node_active_threshold=params.get("node_active_threshold", 0.001),
         max_steps=max_steps
@@ -394,9 +390,9 @@ def simulate_contagion_realization( graph: nx.Graph, init_seeds: tuple, params: 
             "state": state,
             "num_active_nodes": len(active_nodes_time_t),
             "active_nodes": list(active_nodes_time_t),
-            "H0": 0,  #  betti_numbers[t][0],
-            "H1": 1,  # betti_numbers[t][1],
-            "H2": 2,  # betti_numbers[t][2],
+            "H_0": 0,  #  betti_numbers[t][0],
+            "H_1": 1,  # betti_numbers[t][1],
+            "H_2": 2,  # betti_numbers[t][2],
             }
         results.append(features_dict)
 
@@ -436,8 +432,17 @@ def main_sims( params_list: list, max_steps=100, output_file="simulation_results
     # activation_times_results = []  #uncomment for brad
     dfs = []
     for i, params in enumerate(params_list):
-        # print(f"Running simulation {i + 1} with params: {params}")
-        graph, seed_node_combinations = simulate_contagion_map(params=params)
+        print(f"Simulating Contagion Map for simulation: {i}/{len(params_list)}")
+        try:
+            graph, seed_node_combinations = simulate_contagion_map(params=params)
+        except InvalidGraphError:
+            Warning(f"Invalid Graph creation in: simulation_id: {i}")
+            continue
+        # base matrices
+        adjacency_matrix = nx.to_numpy_array(graph, dtype=float, weight=None)
+        # weight_matrix = nx.to_numpy_array(graph, weight='weight', nonedge=np.inf) #
+        weight_0 = nx.to_numpy_array(graph, weight='weight', nonedge=1e9)
+
         # activation_times_results.append({ "sim_id": i, "graph": graph, "realization_id": 0}) #uncomment for brad
         base_dfs = []
         df_graph = nx.to_pandas_edgelist(graph)
@@ -446,8 +451,11 @@ def main_sims( params_list: list, max_steps=100, output_file="simulation_results
         total_non_geo_edges = df_graph.loc[df_graph['type'] == 'non_geometric'].shape[0]
         del df_graph
 
+
         for j, seed_nodes in enumerate(seed_node_combinations):
             G, _, activation_times, results = simulate_contagion_realization(
+                adjacency_matrix=adjacency_matrix,
+                weight_0=weight_0,
                 graph=graph,
                 init_seeds=seed_nodes,
                 params=params,

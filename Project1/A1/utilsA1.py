@@ -5,6 +5,11 @@ import numpy as np
 import json
 from pyvis.network import Network
 
+
+class InvalidGraphError(Exception):
+    pass
+
+
 def visualize_graph(G, output_file):
     # mapping = {n: int(n) for n in G.nodes}
     # G_copy = G.copy()
@@ -213,8 +218,8 @@ def generate_random_params(num_samples=200):
     params_list = []
 
     for _ in range(num_samples):
-        num_nodes = random.randint(100, 200)
-        weighted = random.choice([True, False])
+        num_nodes = random.choice([10, 12, 15, 18])
+        weighted = True #random.choice([True, False])
         n_seeds = random.choices([1, 2, 3, 4])[0] #, weights=[0.1, 0.4, 0.4, 0.1])[0]
         node_active_threshold =  random.choices(np.round(np.arange(0.03, 0.2, 0.01), 3))[0] #if weighted else round(random.choice(np.arange(0.10, 0.20, 0.01)), 3)
         num_neighbor_nodes = random.randint(1, 3)  # if node_active_threshold > 0.1 else random.randint(2, 4)
@@ -271,3 +276,8 @@ def graph_to_distance_matrix(graph: nx.Graph, nodes: list):
 
     dist_matrix = np.minimum(dist_matrix, dist_matrix.T)
     return dist_matrix
+
+
+def return_param_values(keys, source_dict):
+    """Retrieve multiple values from a dictionary based on a list of keys"""
+    return tuple(source_dict[key] for key in keys)
