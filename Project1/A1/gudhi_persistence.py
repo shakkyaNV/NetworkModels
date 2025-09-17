@@ -31,7 +31,7 @@ def compute_persistence(
     :return: Betti Numbers over filtration times: defaultdict(list), Simpleces persistence_intervals: list([dim][filtration][(birth) death)]
     """
 
-    if ngeom_edges_in_persistence:
+    if not ngeom_edges_in_persistence:
         edges_to_drop = [(u, v, d) for u, v, d in graph.edges(data=True) if d.get('type') == 'non_geometric']
         graph.remove_edges_from(edges_to_drop)
 
@@ -43,16 +43,13 @@ def compute_persistence(
             persistence[t, d] = []
 
     # persistence_for_graphics = []  ## gudhi tools requires a special format for diagrams
-
     for t in range(np.nanmax(activation_times) + 1):
         # print(f"---------- Filtration Time Step: {t} ------------")
         tree = gd.simplex_tree.SimplexTree(None)
         tree.make_filtration_non_decreasing()
         # tree.initialize_filtration()
 
-        active_nodes = np.where( (activation_times > 0) &
-                                 (activation_times <= t) )[0]
-
+        active_nodes = [node for node, time  in enumerate(activation_times) if time <= t]
         # Create a subgraph at time = t,
         # Add all current nodes and edges
         subg = graph.subgraph(active_nodes).copy()
@@ -219,7 +216,7 @@ def persistence_representation(
         if len(proc_finite(persistence_in_dim)) == 0:
             continue
 
-        diagram = proc_clamp(proc_scaler(proc_finite(persistence_in_dim)))
+        diagram = proc_scaler(proc_clamp(proc_finite(persistence_in_dim))) ## Test with scale first, clamp later and vice versa
         diagram = np.asarray(diagram, dtype=np.float64)
 
         v_landscape = call_plandscape(diagram)
@@ -255,7 +252,7 @@ def persistence_representation_t(
     call_plandscape = Landscape(resolution=resolution, num_landscapes=num_landscapes)
     call_pimage = PersistenceImage(
         bandwidth=bandwidth,
-        weight=lambda x: x[1],
+        weight=lambda x: x[1] - x[0],
         im_range=[0, 1, 0, 1],
         resolution=[resolution, resolution],
     )
