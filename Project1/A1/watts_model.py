@@ -1,24 +1,10 @@
-import networkx as nx, numpy as np, gudhi_persistence as gp, cvxpy as cx
+import networkx as nx, numpy as np, gudhi_persistence as gp, pandas as pd, cvxpy as cx
 from collections import defaultdict
 from itertools import combinations
 from Project1.A1.utilsA1 import InvalidGraphError
-
-import sys, os
+import os, sys, pickle
 ##### DEFINE VARIABLES
 # ------
-
-import collections
-import itertools
-import os
-import pickle
-import random
-
-import networkx as nx
-import numpy as np
-import pandas as pd
-#     newly_activated_t
-from utilsA1 import snapshots_to_activation_times_series
-import gudhi_persistence as gp
 
 PATH = os.path.dirname(__file__)
 
@@ -206,9 +192,9 @@ def add_non_geometric_edges( graph: nx.Graph, total_random_edges: int, distance_
         attempt = 0
         num_attempts_allowed = 20
         while attempt < num_attempts_allowed:
-            random.shuffle(candidate_pairs)
+            np.random.shuffle(candidate_pairs)
             non_geo_edges = list()
-            ngeo_edge_counts = collections.defaultdict(int)
+            ngeo_edge_counts = defaultdict(int)
 
             for u, v in candidate_pairs:
                 if (
@@ -292,7 +278,7 @@ def state_function(active_nodes, threshold_sum):
 
 
 def get_seed_nodes_combinations(graph: nx.Graph, n_seeds: int = 2) -> list:
-    return list(itertools.combinations(graph.nodes, n_seeds))
+    return list(combinations(graph.nodes, n_seeds))
 
 
 def initial_seed_nodes(graph: nx.Graph, n_seeds: int = 2, seed_cluster_distance: int = 10, init_seeds=None) -> list:
@@ -418,15 +404,17 @@ def simulate_contagion_realization( graph: nx.Graph, init_seeds: tuple, params: 
     return graph, snapshots, activation_times, results
 
 
-def main_sims( params_list: list, max_steps=100, output_file="simulation_results.csv", save_files=False ):
+def main_sims( params_list: list, np_global_seed:int = 666, max_steps=100, output_file="simulation_results.csv", save_files=False ):
     """
     :param params_list: list of dicts with parameters for each run,
                  e.g. [{'num_nodes': 100, 'param2': val2, ...}, ...]
+    :param np_global_seed: global seed for numpy.random module. If localized seed is needed, implement rng = np.random.default_rng(666), rng.choice([2, 1])
     :param max_steps: max steps to run contagion
     :param output_file: filename to save the results
     :param save_files: save results to a csv, pickle file
     :return DataFrame with simulation results and saves to CSV
     """
+    np.random.seed(np_global_seed)
     outfile_path = os.path.join(PATH, "outputs")
     simulation_results = []
     # activation_times_results = []  #uncomment for brad
