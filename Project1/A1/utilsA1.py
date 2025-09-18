@@ -4,6 +4,7 @@ import networkx as nx
 import numpy as np
 import json
 from pyvis.network import Network
+from sklearn.decomposition import PCA
 
 
 class InvalidGraphError(Exception):
@@ -281,3 +282,132 @@ def graph_to_distance_matrix(graph: nx.Graph, nodes: list):
 def return_param_values(keys, source_dict):
     """Retrieve multiple values from a dictionary based on a list of keys"""
     return tuple(source_dict[key] for key in keys)
+
+
+def clean_simulation_df(df, group_cols, state_col='state', front_cols=None, suffix_prefixes=None):
+    """
+    Filter DataFrame to keep only rows where state reaches max and cumsum <= 1 per group.
+    Reorder columns: front_cols + middle_cols + suffix columns.
+
+    Parameters:
+        df : pd.DataFrame
+        group_cols : list[str] - columns to group by (e.g., ['simulation_id', 'realization_id'])
+        state_col : str - column indicating activation/state
+        front_cols : list[str] - columns to put at front
+        suffix_prefixes : list[str] - prefixes of columns to treat as suffix columns (e.g., ['H','L','I','E'])
+
+    Returns:
+        cleaned_df : pd.DataFrame
+        suffix_cols : list[str] - columns detected as suffix columns
+    """
+    # Filter rows
+    df = df[df.groupby(group_cols)[state_col].transform('max') == 1]
+    df = df[df.groupby(group_cols)[state_col].cumsum() <= 1]
+
+    # Identify suffix columns dynamically
+    if suffix_prefixes is None:
+        suffix_prefixes = []
+    suffix_cols = [col for col in df.columns if any(col.startswith(p) for p in suffix_prefixes)]
+
+    # Middle columns
+    middle_cols = [col for col in df.columns if col not in (front_cols or []) + suffix_cols]
+
+    # Reorder
+    cleaned_df = df[(front_cols or []) + middle_cols + suffix_cols].copy()
+
+    return cleaned_df, suffix_cols
+
+
+def compute_pca_features(
+        df,
+        feature_cols,
+        base_cols,
+        n_components=5,
+        valid_check=None):
+    """
+    Compute PCA for specified feature columns and merge into a base DataFrame.
+
+    Parameters:
+        df : pd.DataFrame - input df with feature columns as arrays
+        feature_cols : list[str] - columns containing arrays to PCA
+        base_cols : list[str] - columns to keep as join keys
+        n_components : int - PCA components
+        valid_check : callable(x) -> bool - optional filter function for valid data in column
+
+    Returns:
+        df_pca : pd.DataFrame with PCA columns added
+    """
+    df_pca = df[base_cols].copy()
+
+    if valid_check is None:
+        valid_check = lambda x: isinstance(x, np.ndarray) and not np.isnan(x).any()
+
+    for col in feature_cols:
+        valid_mask = df[col].apply(valid_check)
+        valid_df = df[valid_mask]
+        if valid_df.empty:
+            continue
+
+        X = np.vstack(valid_df[col].values)
+        if X.shape[0] == 0:
+            continue
+
+        pca = PCA(n_components=min(n_components, X.shape[0]))
+        X_pca = pca.fit_transform(X)
+        pca_cols = [f"{col}_PC{i + 1}" for i in range(X_pca.shape[1])]
+
+        temp = valid_df[base_cols].copy()
+        temp[pca_cols] = X_pca
+
+        df_pca = df_pca.merge(temp, on=base_cols, how='left')
+
+    return df_pca
+
+
+def prep_for_cox_tv(df, group_cols, state_col='state',
+                 landscape_prefixes=None,
+                 image_prefixes=None,
+                 essential_prefixes=None):
+    """
+    Prepare a PCA/enhanced DataFrame for survival/Cox analysis:
+    - Replace NaNs with zeros in feature columns
+    - Compute start/stop times
+    - Generate unique id
+    - Order columns
+
+    Parameters:
+        df : pd.DataFrame
+        group_cols : list[str] - columns to group by (e.g., ['simulation_id','realization_id'])
+        state_col : str - column with state/activation
+        landscape_prefixes, image_prefixes, essential_prefixes : list[str] - prefixes to identify features
+
+    Returns:
+        df_final : pd.DataFrame ready for survival analysis
+    """
+    # Collect feature columns dynamically
+    landscape_cols = sorted([c for c in df.columns if any(c.startswith(p) for p in (landscape_prefixes or []))])
+    image_cols = sorted([c for c in df.columns if any(c.startswith(p) for p in (image_prefixes or []))])
+    essential_cols = sorted([c for c in df.columns if any(c.startswith(p) for p in (essential_prefixes or []))])
+
+    feature_cols = landscape_cols + image_cols + essential_cols
+
+    # Replace NaNs in float columns with zeros
+    df[feature_cols] = df[feature_cols].applymap(
+        lambda x: np.zeros_like(x) if isinstance(x, float) and np.isnan(x) else x)
+
+    # Sort
+    df = df.sort_values(group_cols + ['time'])
+
+    # start/stop
+    df["start"] = df["time"]
+    df["stop"] = df.groupby(group_cols)["time"].shift(-1)
+    df["stop"] = df["stop"].fillna(df["start"] + 1)
+
+    # unique id
+    df['id'] = df[group_cols[0]].astype(str) + "_" + df[group_cols[1]].astype(str)
+
+    # final ordering
+    ordered_cols = ["id", "start", "stop", state_col] + landscape_cols + image_cols + essential_cols
+    df_final = df[ordered_cols]
+
+    return df_final
