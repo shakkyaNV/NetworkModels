@@ -444,13 +444,13 @@ def cvt_validation_score(df, k=5):
         # Fit Cox TV model
         ctv = CoxTimeVaryingFitter()
         ctv.fit(train_df, id_col="id", start_col="start", stop_col="stop",
-                event_col="event", show_progress=False)
+                event_col="state", show_progress=False)
 
         # Compute partial hazards for validation set
         val_risk = ctv.predict_partial_hazard(val_df)
 
         # Compute concordance
-        cindex = concordance_index(val_df['stop'], -val_risk, val_df['event'])
+        cindex = concordance_index(val_df['stop'], -val_risk, val_df['state'])
 
         fold_cindex.append(cindex)
 
