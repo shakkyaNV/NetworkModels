@@ -229,6 +229,7 @@ def persistence_representation(
 
 def persistence_representation_t(
     persistence: np.ndarray,
+    persistence_surface_function = lambda x: x[1] - x[0],
     bandwidth: float = 0.1,
     resolution: int = 50,
     num_landscapes: int = 3,
@@ -236,6 +237,7 @@ def persistence_representation_t(
     """
     Create persistence landscape/image arrays, later to be visualized/PCA'd
     :param persistence: gudhi.SimplexTree.persistence_intervals_in_dimension (nx2): each (birth, death)
+    :param persistence_surface_function: lambda expression for the weight function of persistence_image
     :param bandwidth: bandwidth for persitence image (determines the smoothing of gaussian smoother around hotspots)
     :param resolution: resolution of persistence
     :param num_landscapes: number of landscapes
@@ -252,7 +254,7 @@ def persistence_representation_t(
     call_plandscape = Landscape(resolution=resolution, num_landscapes=num_landscapes)
     call_pimage = PersistenceImage(
         bandwidth=bandwidth,
-        weight=lambda x: x[1] - x[0],
+        weight=persistence_surface_function,
         im_range=[0, 1, 0, 1],
         resolution=[resolution, resolution],
     )

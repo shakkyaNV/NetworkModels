@@ -10,6 +10,15 @@ from sklearn.decomposition import PCA
 class InvalidGraphError(Exception):
     pass
 
+def get_representation_choice_function(var: str):
+    choice_functions = {
+        "persistence": lambda x: x[1] - x[0],
+        "max": lambda x: max(abs(x[0]), abs(x[1]), x[1] - x[0]),
+        "arctan": lambda x: np.arctan((x[1] - x[0])),
+        "birth": lambda x: x[0],
+        "death": lambda x: x[1]
+    }
+    return choice_functions[var]
 
 def visualize_graph(G, output_file):
     # mapping = {n: int(n) for n in G.nodes}

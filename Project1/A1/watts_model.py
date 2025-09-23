@@ -1,7 +1,7 @@
 import networkx as nx, numpy as np, gudhi_persistence as gp, pandas as pd, cvxpy as cx
 from collections import defaultdict
 from itertools import combinations
-from Project1.A1.utilsA1 import InvalidGraphError
+from Project1.A1.utilsA1 import InvalidGraphError, get_representation_choice_function
 import os, sys, pickle
 ##### DEFINE VARIABLES
 # ------
@@ -345,7 +345,9 @@ def simulate_contagion_map(params: dict):
 def simulate_contagion_realization( graph: nx.Graph, init_seeds: tuple, params: dict,
                                     adjacency_matrix: np.ndarray, weight_0: np.ndarray,
                                     max_steps: int = 100,
-                                    sim_id: int = 1, realization_id: int = 1, calculate_representation: bool = False ):
+                                    sim_id: int = 1, realization_id: int = 1,
+                                    calculate_representation: bool = False
+                                    ):
     # Run contagion propagation
     active_nodes_at_end, activation_times, snapshots = contagion_propagation(
         num_nodes=params.get("num_nodes", 100),
@@ -386,11 +388,14 @@ def simulate_contagion_realization( graph: nx.Graph, init_seeds: tuple, params: 
         bandwidth = params.get("bandwidth", 0.1)
         num_landscapes = params.get("num_landscapes", 3)
         resolution = params.get("resolution", 50)
+        representation_choice_function  = params.get("representation_choice_function", "persistence")
+        representation_choice_function = get_representation_choice_function(representation_choice_function)
         L, I, E, representaion_params = gp.persistence_representation_t(
             persistence=persistence,
             bandwidth=bandwidth,
             resolution=resolution,
             num_landscapes=num_landscapes,
+            persistence_surface_function=representation_choice_function,
         )
         rename = lambda d, prefix: {f"{prefix}_{k}": v for k, v in d.items()}
 
