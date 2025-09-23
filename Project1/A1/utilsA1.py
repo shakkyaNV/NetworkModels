@@ -1,10 +1,11 @@
-import pickle
-import random
-import networkx as nx
-import numpy as np
-import json
+import pickle, random, json
+import networkx as nx, numpy as np
+
 from pyvis.network import Network
 from sklearn.decomposition import PCA
+from lifelines import CoxTimeVaryingFitter
+from lifelines.utils import  concordance_index
+from sklearn.model_selection import KFold
 
 
 class InvalidGraphError(Exception):
@@ -224,25 +225,29 @@ def snapshots_to_activation_times_series(snapshots, num_nodes):
 
 
 
-def generate_random_params(num_samples=200):
+def generate_random_params(num_samples=200, seed_rng:int= 666) -> list:
+    param_generation_rng = np.random.default_rng(444)
     params_list = []
 
     for _ in range(num_samples):
-        num_nodes = random.choice([10, 12, 15, 18])
-        weighted = True #random.choice([True, False])
-        n_seeds = random.choices([1, 2, 3, 4])[0] #, weights=[0.1, 0.4, 0.4, 0.1])[0]
-        node_active_threshold =  random.choices(np.round(np.arange(0.03, 0.2, 0.01), 3))[0] #if weighted else round(random.choice(np.arange(0.10, 0.20, 0.01)), 3)
-        num_neighbor_nodes = random.randint(1, 3)  # if node_active_threshold > 0.1 else random.randint(2, 4)
-        distance_threshold = random.randint(num_neighbor_nodes + 1, 10) # if node_active_threshold > 0.1 else random.randint( num_neighbor_nodes + 5, 15)
-        total_random_edges = random.choice(range(5, 51, 5)) # if node_active_threshold > 0.1 else random.choice(range(5, 31, 5))
-        upper_weight_limit = random.randint(10, 30)  # if node_active_threshold > 0.1 else random.randint(20, 40)
-        skew_power =  random.randint(2, 4)
-        seed_cluster_distance = random.randint(n_seeds + 1, 30)
+        num_nodes = param_generation_rng.choice([20])
+        weighted = True
+        n_seeds = param_generation_rng.choice([2])
+        node_active_threshold = param_generation_rng.choice([0.02, 0.025, 0.03, 0.1])
+        num_neighbor_nodes = param_generation_rng.choice([3, 4])
+        distance_threshold = param_generation_rng.integers(num_neighbor_nodes + 1, num_neighbor_nodes + 2)
+        total_random_edges = param_generation_rng.choice([20, 30, 40])
+        upper_weight_limit = param_generation_rng.choice([10, 20])
+        skew_power = param_generation_rng.choice([2, 4])
+        seed_cluster_distance = 20
         ngeom_edges_in_persistence = False
         max_persistence_dim = 2
-        threshold_sum = sum(range(num_nodes)) - 1
+        threshold_sum = sum(range(num_nodes))
         seeding_method = 'all_combinations'
-        ngeo_placement = 'ngeo_per_node'
+        ngeo_placement = 'random.choice'
+        calculate_representation = True
+        bandwidth = param_generation_rng.choice([0.01, 0.02, 0.05, 0.1, 0.2, 0.25, 0.5, 0.8, 1.0, 2.0])
+        representation_choice_function= param_generation_rng.choice(['persistence', 'birth', 'death', 'max', 'arctan'])
 
         param = {
             'num_nodes': num_nodes,  # fixed
@@ -259,7 +264,10 @@ def generate_random_params(num_samples=200):
             'ngeom_edges_in_persistence': ngeom_edges_in_persistence,
             'max_persistence_dim': max_persistence_dim,
             'threshold_sum': threshold_sum,
-            'seeding_method': seeding_method
+            'seeding_method': seeding_method,
+            'calculate_representation': calculate_representation,
+            'bandwidth': 0.4,
+            'representation_choice_function': 'persistence'
         }
 
         params_list.append(param)
@@ -420,3 +428,30 @@ def prep_for_cox_tv(df, group_cols, state_col='state',
     df_final = df[ordered_cols]
 
     return df_final
+
+def cvt_validation_score(df, k=5):
+    kf = KFold(n_splits=k, shuffle=True, random_state=42)
+    fold_cindex = []
+
+    ids = df["id"].unique()
+
+    for train_idx, val_idx in kf.split(ids):
+        train_ids, val_ids = ids[train_idx], ids[val_idx]
+
+        train_df = df[df["id"].isin(train_ids)]
+        val_df   = df[df["id"].isin(val_ids)]
+
+        # Fit Cox TV model
+        ctv = CoxTimeVaryingFitter()
+        ctv.fit(train_df, id_col="id", start_col="start", stop_col="stop",
+                event_col="event", show_progress=False)
+
+        # Compute partial hazards for validation set
+        val_risk = ctv.predict_partial_hazard(val_df)
+
+        # Compute concordance
+        cindex = concordance_index(val_df['stop'], -val_risk, val_df['event'])
+
+        fold_cindex.append(cindex)
+
+    return np.mean(fold_cindex)
