@@ -226,7 +226,7 @@ def snapshots_to_activation_times_series(snapshots, num_nodes):
 
 
 def generate_random_params(num_samples=200, seed_rng:int= 666) -> list:
-    param_generation_rng = np.random.default_rng(444)
+    param_generation_rng = np.random.default_rng(seed_rng)
     params_list = []
 
     for _ in range(num_samples):
@@ -266,8 +266,8 @@ def generate_random_params(num_samples=200, seed_rng:int= 666) -> list:
             'threshold_sum': threshold_sum,
             'seeding_method': seeding_method,
             'calculate_representation': calculate_representation,
-            'bandwidth': 0.4,
-            'representation_choice_function': 'persistence'
+            'bandwidth': bandwidth,
+            'representation_choice_function': representation_choice_function
         }
 
         params_list.append(param)
