@@ -174,6 +174,7 @@ def plot_persistence_barcodes(simplex_intervals, activation_times, max_dim=2):
 
 def persistence_representation(
     persistence: np.ndarray,
+    persistence_surface_function=lambda x: x[1] - x[0],
     bandwidth: float = 0.1,
     resolution: int = 50,
     num_landscapes: int = 3,
@@ -181,6 +182,7 @@ def persistence_representation(
     """
     Create persistence landscape/image arrays, later to be visualized/PCA'd
     :param persistence: gudhi.SimplexTree.persistence_intervals_in_dimension (nx2): each (birth, death)
+    :param persistence_surface_function: lambda expression for the weight function of persistence_image
     :param bandwidth: bandwidth for persitence image (determines the smoothing of gaussian smoother around hotspots)
     :param resolution: resolution of persistence
     :param num_landscapes: number of landscapes
@@ -196,13 +198,14 @@ def persistence_representation(
     call_plandscape = Landscape(resolution=resolution, num_landscapes=num_landscapes)
     call_pimage = PersistenceImage(
         bandwidth=bandwidth,
-        weight=lambda x: x[1],
+        weight=persistence_surface_function,
         im_range=[0, 1, 0, 1],
         resolution=[resolution, resolution],
     )
     params = {
         "num_landscapes": num_landscapes,
         "bandwidth": bandwidth,
+        "surface_function": persistence_surface_function,
         "resolution": resolution,
         "pre-processing": ["finite", "mix_max_scaler", "clamp"],
     }
@@ -216,7 +219,7 @@ def persistence_representation(
         if len(proc_finite(persistence_in_dim)) == 0:
             continue
 
-        diagram = proc_scaler(proc_clamp(proc_finite(persistence_in_dim))) ## Test with scale first, clamp later and vice versa
+        diagram = proc_clamp(proc_scaler(proc_finite(persistence_in_dim)))
         diagram = np.asarray(diagram, dtype=np.float64)
 
         v_landscape = call_plandscape(diagram)
