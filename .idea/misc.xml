@@ -3,5 +3,8 @@
   <component name="Black">
     <option name="sdkName" value="Python 3.12 (NetworkModels)" />
   </component>
-  <component name="ProjectRootManager" version="2" project-jdk-name="C:\ProgramData\anaconda3" project-jdk-type="Python SDK" />
+  <component name="ProjectResources">
+    <resource url="http://graphml.graphdrawing.org/xmlns" location="$USER_HOME$/OneDrive - Texas Tech University/Academic/TM4 - Academic/graphml.xsd.xml" />
+  </component>
+  <component name="ProjectRootManager" version="2" project-jdk-name="Python 3.13 virtualenv at C:\Users\sranasin\PycharmProjects\NetworkModels\NetworkModels_venv" project-jdk-type="Python SDK" />
 </project>
