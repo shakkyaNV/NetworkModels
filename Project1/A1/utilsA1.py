@@ -455,3 +455,36 @@ def cvt_validation_score(df, k=5):
         fold_cindex.append(cindex)
 
     return np.mean(fold_cindex)
+
+
+
+def export_graphml_with_namespace(G, output_path, xmlns_path=None):
+    """
+    Exports a NetworkX graph to GraphML with proper Gephi-compatible headers.
+
+    Parameters
+    ----------
+    G : networkx.Graph
+        The graph to export.
+    output_path : str
+        Path to save the GraphML file.
+    xmlns_path : str, optional
+    """
+    nx.write_graphml(G, output_path)
+
+    # Patch the <graphml> header and include schema info if provided
+    with open(output_path, "r", encoding="utf-8") as f:
+        content = f.read()
+
+    if xmlns_path:
+        xmlns_header = (
+            '<graphml xmlns="http://graphml.graphdrawing.org/xmlns"\n'
+            '         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"\n'
+            f'         xsi:schemaLocation="http://graphml.graphdrawing.org/xmlns {xmlns_path}">'
+        )
+        content = content.replace("<graphml>", xmlns_header)
+
+    with open(output_path, "w", encoding="utf-8") as f:
+        f.write(content)
+
+    print(f"GraphML exported to: {output_path}")
