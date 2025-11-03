@@ -288,11 +288,11 @@ fabric.properties
 **/.ipynb_checkpoints/
 .pytest_cache/
 .virtual_documents/
-.html
-.csv
-.pkl
-.png
-.jpeg
+*.html
+*.csv
+*.pkl
+*.png
+*.jpeg
 media/
 **/__pycache__/
 Project1/A1/__pycache__
