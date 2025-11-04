@@ -1,0 +1,90 @@
+import networkx as nx
+import pandas as pd
+import numpy as np
+import os
+
+from Project1.A3.utils_a3 import (
+    BASE_DIR, MODULE_DIR, RESOURCES_DIR,
+    DK_FSNAMES_MAPPING_DICT, NODE_FSREGION_TO_ID
+)
+
+
+class DKAtlasGraph:
+    ## Class level information
+    DEFAULT_RENAME_DICT = DK_FSNAMES_MAPPING_DICT
+    DK_DEFAULT_WEIGHT_SCHEME = {} # should be in dict format: {(1, 2) : 5, (2, 3): 10}
+    NODE_FSREGION_TO_ID = NODE_FSREGION_TO_ID
+    def __init__(self, xml_path:str=os.path.join("resources", "masters33.graphml"), base_rename:bool=True):
+        """
+        Desikan Killiany Atlas Graph
+        :param xml_path: Relative path from $MODULE$ Directory
+        :param base_rename: Whether to apply base renaming scheme of dn_names to fsnames
+        """
+        self._xml_path = xml_path
+        self.xml_path = os.path.abspath(os.path.join(BASE_DIR, xml_path))
+        self._load_graphml()
+
+        if base_rename:
+            self.rename_nodes(self.DEFAULT_RENAME_DICT)
+
+    def _load_graphml(self):
+        """
+        Load the graphml file into a networkx graph
+        :return: nx.graph
+        """
+        self.graph = nx.read_graphml(self.xml_path)
+        try:
+            nx.relabel_nodes(self.graph, lambda x: int(x), copy = False)
+        except nx.NetworkXError as e:
+            print(e)
+            raise GraphCreationError("Error in converting '<node_id' to node_id: Eg: '1' to 1")
+
+    def rename_nodes(self, rename_dict:dict, attr_name:str="dn_name", *, new_attr_name:str="region_name"):
+        """
+        Rename specific attributes of the nodes to new attribute names. Eg: dn_names to fsnames
+        :param rename_dict: {old_name:new_name} partial renaming allowed.
+        :param attr_name: Attribute name to be replaced (default: 'region_name')
+        :param new_attr_name: (*args) Optional argument to be passed if the graph attribute should be renamed in-place.
+        :return: nx.Graph
+        """
+        if new_attr_name is None:
+            new_attr_name = attr_name
+        for node in self.graph.nodes():
+            self.graph.nodes[node][new_attr_name] = rename_dict[self.graph.nodes[node][attr_name]]
+
+    def assign_node_activation(self , activation_dict):
+        for node, value in activation_dict.items():
+            self.graph.nodes[node]['activation_threshold'] = value
+
+    def assign_edge_weight(self, weight_function=None):
+        """
+        Assign weight to each edge based on regional information. Current methods are
+        1. NaN
+
+        :param weight_function:
+        :return: nx.Graph
+        """
+        if weight_function is None:
+            weight_function = np.random.randint(low=1, high=20, size = self.graph.number_of_edges())
+        if weight_function == "Inverse Fiber Mean":
+            nx.set_edge_attributes(G = self.graph, values=self.DK_DEFAULT_WEIGHT_SCHEME, name = "weight")
+
+    def input_patient_data(self, data_series:pd.Series, df_type:str="suvr"):
+        """
+        Input Patient Data into the networkx graph as an attribute
+        :param data_series: a pandas Series representing one patient's data
+        :param df_type: column prefix or key for values to assign to nodes
+        :return:
+        """
+        data_series_dict = data_series.rename(index=self.NODE_FSREGION_TO_ID)
+        nx.set_node_attributes(self.graph, values=data_series_dict, name=df_type)
+
+    def summary(self):
+        print(f"Graph has {self.graph.number_of_nodes()} nodes and {self.graph.number_of_edges()} edges")
+        sample_node_id = np.random.choice(self.graph.nodes())
+        sample_nodes_info = self.graph.nodes[sample_node_id]
+        print(f"Node Information node: {sample_node_id}: {sample_nodes_info}")
+
+
+class GraphCreationError(Exception):
+    pass
