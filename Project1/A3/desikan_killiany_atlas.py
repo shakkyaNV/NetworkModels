@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 import os
 
-from Project1.A3.utils_a3 import (
+from utils_a3 import (
     BASE_DIR, MODULE_DIR, RESOURCES_DIR,
     DK_FSNAMES_MAPPING_DICT, NODE_FSREGION_TO_ID
 )
@@ -66,8 +66,8 @@ class DKAtlasGraph:
         """
         if weight_function is None:
             weight_function = np.random.randint(low=1, high=20, size = self.graph.number_of_edges())
-        if weight_function == "Inverse Fiber Mean":
-            nx.set_edge_attributes(G = self.graph, values=self.DK_DEFAULT_WEIGHT_SCHEME, name = "weight")
+        # if weight_function == "Inverse_Fiber_Mean":
+        #     nx.set_edge_attributes(G = self.graph, values=self.DK_DEFAULT_WEIGHT_SCHEME, name = "weight")
 
     def input_patient_data(self, data_series:pd.Series, df_type:str="suvr"):
         """
