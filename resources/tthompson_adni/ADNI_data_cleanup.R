@@ -109,7 +109,11 @@ dir.create(structure_file_path, recursive = F, showWarnings = T)
 
 # Capture column structure difference between new/old file types
 if (file_structure == "adni") {
-  cols_to_keep <- str_to_lower(c("LONIUID", "PTID", "RID"))
+  cols_to_keep <- str_to_lower(c("LONIUID", "PTID", "RID", "SCANDATE", "QC_FLAG", "TRACER", "AMYLOID_STATUS", 
+  								 "AMYLOID_STATUS_COMPOSITE_REF", "CENTILOIDS", "SUMMARY_SUVR", "SUMMARY_VOLUME", 
+								 "WHOLECEREBELLUM_SUVR", "WHOLECEREBELLUM_VOLUME", "COMPOSITE_REF_SUVR", "COMPOSITE_REF_VOLUME", 
+								 "CEREBELLUM_CORTEX_SUVR",	"CEREBELLUM_CORTEX_VOLUME",	"ERODED_SUBCORTICALWM_SUVR",	"ERODED_SUBCORTICALWM_VOLUME")
+								)
 } else {
   cols_to_keep <- str_to_lower(c("RID"))
 }
