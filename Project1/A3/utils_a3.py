@@ -1,6 +1,6 @@
 import os, sys
 import networkx as nx
-import numpy as np
+import numpy as np, pandas as pd
 
 ## MODEL WIDE VARIABLES
 MODULE_DIR = os.path.abspath(__file__)
@@ -175,6 +175,148 @@ NODE_FSREGION_TO_ID = {'rh_lateralorbitofrontal': 1,
  'lh_amygdala': 82,
  'brainstem': 83}
 
+## FOR ADNI PATIENT DATA FILES
+
+def df_rename_to_fsnames(df_path):
+    """
+    Return the fsnames renamed ADNI data file
+    :param df_path: Relative path from BASE directory (../NetworkModels/)
+    :return: pd.DataFrame
+    """
+    df = pd.read_csv(os.path.join(BASE_DIR, df_path))
+    # try:
+    #     df_suffix =
+    #     dnnames_mapping_dir = os.path.join(BASE_DIR, df_path.removesuffix("_suvr.csv|_volume.csv") + "_mapping.csv")
+    #     dnnames_mapping = pd.read_csv(dnnames_mapping_dir)
+    # except:
+    # ## IF you can't find a .csv with ("_suvr" subbed to "_mappig") go with utilsa3_dict
+    map_dict = DK_FSNAMES_MAPPING_DICT
+    df.rename(columns=map_dict, inplace=True)
+    return df
+
+def safe_filter_df(df:pd.DataFrame, filter_all:bool=True):
+    """
+    Filter all non-safe entries from the ADNI data frame.
+    Eg: Remove qc_flag <= 0, any patients that use NAV tracer, {to be implemented, any patient that use many tracers}
+    :param df: ADNI dataset renamed accordingly
+    :param filter_all: Bool specifying to filter all non-safe entries. {False, return the as is dataset}
+    :return: pd.DataFrame
+    """
+    if filter_all:
+        df_new = df.loc[(df['qc_flag'] >= 0) & (df['tracer'].isin(['FBP', 'FBB']))] #make sure to use .loc/.iloc or copy
+        return df_new
+    else:
+        return df
+
+def activations_cortical_regions_df(df:pd.DataFrame, base_setup:bool=True):
+    """
+    Apply base thresholding [Based on whole cerebellum referencing, should not be used for coritical regions (but we're
+    going to use it anyway), should not be used to compare across tracer (but we're going to use it anyway)]
+    :param df: ADNI dataset renamed accordingly (filtered or unfiltered) {to be implemented, not checking for NAV for the moment}
+    :param base_setup: Bool specifiying to apply base thresholding. Also assume it went through utils.safe_filter_df {False, return the as is dataset}
+    :return: pd.DataFrame with tracer_threshold column specifying tracer tresholds {against better judgement}, and suvr values turned to 1/0 values
+    """
+    if base_setup:
+        tracer_threshold = 'tracer_threshold'
+        df.loc[:, tracer_threshold] = df['tracer'].apply(lambda x: 1.11 if x == "FBP" else 1.08)
+        for col in DK_FSNAMES_MAPPING_DICT.values():
+            df.loc[:, f'{col}_positivity'] = df.apply(lambda row: 1 if row[col] > row[tracer_threshold] else 0, axis=1)
+        positivity_indicator_columns = [col for col in df.columns if col.endswith("_positivity")]
+        return df, positivity_indicator_columns
+    else:
+        return df, DK_FSNAMES_MAPPING_DICT.values()
+
+def activation_times_of_patients_for_cortical_regions_df(df:pd.DataFrame, feature_cols:list, base_setup:bool=True):
+    """
+    Returns dict of activation times and snapshots of activation per patient
+    :param df: DataFrame
+    :param feature_cols: list of feature column names {if went through utils.activations_cortical_regions_df it should match utils.DK_FSNAMES_MAPPING_DICT_positivity
+    :param base_setup: Bool specificying that dataset went through utils.safe_filter_df and utils.activations_cortical_regions_df
+    :return: dict of activations and dict of snapshots
+    """
+    if base_setup:
+        assert [col.removesuffix("_positivity") for col in df.columns if col.endswith("positivity")] == list(
+            NODE_FSREGION_TO_ID.keys())
+
+        df.sort_values(by=['rid', 'scandate'], inplace=True)
+        grouped = df.groupby(['rid'], as_index=True)
+
+        snapshots = dict()  # store results per group
+        activation_times = dict()
+        state_value = dict()
+        feature_cols = feature_cols
+        for group_key, group_df in grouped:
+            # drop 'rid' and 'scandate' if they are in columns (they will be index now)
+            matrix = group_df[feature_cols].values  # shape [n_rows, n_features], only the 0/1 columns
+            n_rows, n_cols = matrix.shape
+            cumulative_set = set()
+            group_sets = []
+            active_t = np.full(n_cols, -1)      ##### Check with watts_model and test_WTM (0 or -1 -> check GP.persistence)
+
+            for i in range(n_rows):
+                # get indices of 1s in current row
+                row_indices = set(map(int, np.where(matrix[i])[0]))
+
+                # for newly_activated nodes
+                newly_activated = row_indices - cumulative_set
+                active_t[list(newly_activated)] = i
+
+                # cumulative union (because we need cumulative activated nodes in next iteration
+                # also we assume that the node amyloid/Tau content don't regress (but in practicality it does)
+                cumulative_set = cumulative_set.union(row_indices)
+                group_sets.append(cumulative_set.copy())  # copy so each row has its own set
+
+            snapshots[group_key[0]] = group_sets
+            activation_times[group_key[0]] = active_t
+
+            # We'll take the overall amyloid positivity (with whole cerebellum ref) as state value
+            state_value[group_key[0]] = group_df['amyloid_status'].values
+
+
+        return activation_times, snapshots, state_value
+    else:
+        return None, None, None
+
+### FOR GRAPH DF's
+
+def node_df_from_graph(graph:nx.Graph) -> pd.DataFrame:
+    """
+    Return a pandas data frame with node details
+    :param graph: nx.Graph from dkatlas
+    :return: pd.DataFrame with node details
+    """
+    return  pd.DataFrame.from_dict(dict(graph.nodes(data = True)), orient = 'index')
+
+def edge_df_from_graph(graph:pd.DataFrame) -> pd.DataFrame:
+    """
+    Return a pandas data frame with edge details
+    :param graph: nx.Graph from dkatlas
+    :return: pd.DataFrame with edge details
+    """
+    graph_edge_df = pd.DataFrame(list(graph.edges(data = True)), columns = ['source', 'target', 'attributes'])
+    # graph_edge_df = graph_edge_df.astype({'source':'int64', 'target':'int64'})
+    assert (graph_edge_df[['source', 'target']].dtypes == ['int64', 'int64']).all(), "Relabelling Failed"
+
+    if graph_edge_df['attributes'].apply(lambda x: isinstance(x, dict)).all():
+        attr_df = pd.json_normalize(graph_edge_df['attributes'])
+        graph_edge_df = pd.concat([graph_edge_df[['source', 'target']], attr_df], axis = 1)
+    return graph_edge_df
+
+def determine_geom_ngeom_edges(edge_df: pd.DataFrame, base_method:bool=True) -> list:
+    """
+    Return a list compatible for [(u1, v1, w1), (u2, v2, w2), ...] for graph.add_weighted_edges_from but for geometric
+    and non_geometric edge classification
+    :param edge_df: Edge Details data from utils.edge_df_from_graph
+    :param base_method: Bool specifying to use Fiber_mean_length>{value} to determine geom/ngeom
+    :return: [(u1, v1, w1), (u2, v2, w2), ...] for graph.add_weighted_edges_from
+    """
+    edge_df_ = edge_df.copy()
+    edge_df_.loc[:, 'geom_type'] = edge_df_['fiber_length_mean'].apply(
+        lambda fiber_length: "geometric" if fiber_length > 50 else "non_geometric")
+    geom_ngeom_edges = [(row.source, row.target, row.geom_type) for row in edge_df_.itertuples()]
+    return geom_ngeom_edges
+
+## FOR GRAPH VISUALIZATION
 
 def export_graphml_with_namespace(G, output_path, xmlns_path=None):
     """
