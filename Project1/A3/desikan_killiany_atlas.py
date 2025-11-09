@@ -3,9 +3,11 @@ import pandas as pd
 import numpy as np
 import os
 
+
 from utils_a3 import (
     BASE_DIR, MODULE_DIR, RESOURCES_DIR,
-    DK_FSNAMES_MAPPING_DICT, NODE_FSREGION_TO_ID
+    DK_FSNAMES_MAPPING_DICT, NODE_FSREGION_TO_ID,
+    node_df_from_graph, edge_df_from_graph, determine_geom_ngeom_edges
 )
 
 
@@ -17,10 +19,15 @@ class DKAtlasGraph:
     def __init__(self, xml_path:str=os.path.join("resources", "masters33.graphml"), base_rename:bool=True):
         """
         Desikan Killiany Atlas Graph
-        :param xml_path: Relative path from $MODULE$ Directory
+        :param xml_path: Relative path from BASE Directory
         :param base_rename: Whether to apply base renaming scheme of dn_names to fsnames
         """
+        # Graph meta data
+        self._graph_renamed = False
+        self._graph_weighted = False
         self._xml_path = xml_path
+
+
         self.xml_path = os.path.abspath(os.path.join(BASE_DIR, xml_path))
         self._load_graphml()
 
@@ -47,28 +54,47 @@ class DKAtlasGraph:
         :param new_attr_name: (*args) Optional argument to be passed if the graph attribute should be renamed in-place.
         :return: nx.Graph
         """
-        if new_attr_name is None:
-            new_attr_name = attr_name
-        for node in self.graph.nodes():
-            self.graph.nodes[node][new_attr_name] = rename_dict[self.graph.nodes[node][attr_name]]
+        try:
+            if new_attr_name is None:
+                new_attr_name = attr_name
+            for node in self.graph.nodes():
+                self.graph.nodes[node][new_attr_name] = rename_dict[self.graph.nodes[node][attr_name]]
+            self._graph_renamed = True
 
+        except Exception as e:
+            raise GraphCreationError(f"Graph Rename Failed: {e}")
+
+    #### No need for now
     def assign_node_activation(self , activation_dict):
         for node, value in activation_dict.items():
             self.graph.nodes[node]['activation_threshold'] = value
 
     def assign_edge_weight(self, weight_function=None):
         """
-        Assign weight to each edge based on regional information. Current methods are
-        1. NaN
-
-        :param weight_function:
+        Assign weight to each edge based on regional information.
+        Current methods are same as braiding braak and braak {Future: See the impact of Fractional Anisotrophy Diffusion}
+        :param weight_function: One of "weight1" : n/l or "weight2" : n/{l**2)
         :return: nx.Graph
         """
-        if weight_function is None:
-            weight_function = np.random.randint(low=1, high=20, size = self.graph.number_of_edges())
-        # if weight_function == "Inverse_Fiber_Mean":
-        #     nx.set_edge_attributes(G = self.graph, values=self.DK_DEFAULT_WEIGHT_SCHEME, name = "weight")
+        try:
+            if not self._graph_renamed:
+                self.rename_nodes(self.DEFAULT_RENAME_DICT)
 
+            if weight_function is None:
+                weight_function = np.random.randint(low=1, high=20, size = self.graph.number_of_edges())
+            elif weight_function == "weight1":
+                for u, v, data in self.graph.edges(data=True):
+                    data['weight1'] = data['number_of_fibers']/data['fiber_length_mean']
+            elif weight_function == "weight2":
+                for u, v, data in self.graph.edges(data=True):
+                    data['weight2'] = data['number_of_fibers']/(data['fiber_length_mean']**2)
+            self._graph_weighted = True
+        except ZeroDivisionError as e:
+            raise GraphCreationError(f"Graph contains zero valued 'fiber length mean: {e}")
+        except Exception as e:
+            raise GraphCreationError(f"Graph Weight Error: {e}")
+
+    #### No need for now (We keep data as external matrix. Adj and Degree)
     def input_patient_data(self, data_series:pd.Series, df_type:str="suvr"):
         """
         Input Patient Data into the networkx graph as an attribute
@@ -78,6 +104,26 @@ class DKAtlasGraph:
         """
         data_series_dict = data_series.rename(index=self.NODE_FSREGION_TO_ID)
         nx.set_node_attributes(self.graph, values=data_series_dict, name=df_type)
+
+
+    def set_ngeom_geom_property(self, geom_max_fiber_length):
+        """
+        Set the Geometric or Non-Geometricness of the graph. Current
+        :param geom_max_fiber_length: Max length of a fiber to be classifed as geometric
+        :return: self
+        """
+        geom_ngeom_list = determine_geom_ngeom_edges(edge_df_from_graph(self.graph),
+                                              fiber_max_geom_length=geom_max_fiber_length,
+                                              base_method=True)
+        self._graph_set_edge_property(geom_ngeom_list, property_name="type")
+
+    def _graph_set_edge_property(self, property_list:list, property_name:str):
+        """
+        Set a property for Edges of self.graph. Assumes in the format of [(u, v, data), ...]
+        :param property_name: Name to set the property
+        :return: self
+        """
+        self.graph.add_weighted_edges_from(property_list, weight=property_name)
 
     def summary(self):
         print(f"Graph has {self.graph.number_of_nodes()} nodes and {self.graph.number_of_edges()} edges")
