@@ -1,4 +1,6 @@
 import os, sys
+import pickle
+
 import networkx as nx
 import numpy as np, pandas as pd
 
@@ -204,6 +206,7 @@ def safe_filter_df(df:pd.DataFrame, filter_all:bool=True):
     """
     if filter_all:
         df_new = df.loc[(df['qc_flag'] >= 0) & (df['tracer'].isin(['FBP', 'FBB']))] #make sure to use .loc/.iloc or copy
+        df_new = df_new.drop_duplicates(subset = 'loniuid', keep='first')               # Base remove duplicate entries based on loniuid
         return df_new
     else:
         return df
@@ -226,19 +229,21 @@ def activations_cortical_regions_df(df:pd.DataFrame, base_setup:bool=True):
     else:
         return df, DK_FSNAMES_MAPPING_DICT.values()
 
-def activation_times_of_patients_for_cortical_regions_df(df:pd.DataFrame, feature_cols:list, base_setup:bool=True):
+def activation_times_of_patients_for_cortical_regions_df(df:pd.DataFrame, feature_cols:list, base_setup:bool=True, save_files:bool=False, save_files_path:str=None):
     """
     Returns dict of activation times and snapshots of activation per patient
     :param df: DataFrame
     :param feature_cols: list of feature column names {if went through utils.activations_cortical_regions_df it should match utils.DK_FSNAMES_MAPPING_DICT_positivity
     :param base_setup: Bool specificying that dataset went through utils.safe_filter_df and utils.activations_cortical_regions_df
+    :param save_files: Bool specifying whether to save files to disk (format pickle)
+    :param save_files_path: Directory (folder only) specifying path to save files to disk, relative to Base_Dir: os.path.join(utils.BASE_DIr, <path>)
     :return: dict of activations and dict of snapshots
     """
     if base_setup:
         assert [col.removesuffix("_positivity") for col in df.columns if col.endswith("positivity")] == list(
             NODE_FSREGION_TO_ID.keys())
 
-        df.sort_values(by=['rid', 'scandate'], inplace=True)
+        df.sort_values(by=['rid', 'loniuid'], inplace=True)        # Technically you should sort by 'rid' and 'scandate' # duplicate loniuids must be removed by now
         grouped = df.groupby(['rid'], as_index=True)
 
         snapshots = dict()  # store results per group
@@ -246,7 +251,7 @@ def activation_times_of_patients_for_cortical_regions_df(df:pd.DataFrame, featur
         state_value = dict()
         feature_cols = feature_cols
         for group_key, group_df in grouped:
-            # drop 'rid' and 'scandate' if they are in columns (they will be index now)
+            # drop 'rid' and 'loniuid' if they are in columns (they will be index now)
             matrix = group_df[feature_cols].values  # shape [n_rows, n_features], only the 0/1 columns
             n_rows, n_cols = matrix.shape
             cumulative_set = set()
@@ -272,10 +277,58 @@ def activation_times_of_patients_for_cortical_regions_df(df:pd.DataFrame, featur
             # We'll take the overall amyloid positivity (with whole cerebellum ref) as state value
             state_value[group_key[0]] = group_df['amyloid_status'].values
 
+        if save_files:
+            save_files_path = os.path.abspath(os.path.join(BASE_DIR, save_files_path))
+            # MAPPING FILE TO SEE IF THE PICKLE FILE RETAINED ORDER (and for pytest)
+            df_rid_loniuid = df[['rid', 'loniuid', 'scandate']]
+            df_rid_loniuid.to_csv(os.path.join(save_files_path, "df_rid_lonuid.cv"), index = False)
+
+            # Save other files to PICKLE
+            with open(os.path.join(save_files_path, "activation_times.pkl"), 'wb') as f:
+                pickle.dump(activation_times, f)
+
+            with open(os.path.join(save_files_path, "state_values.pkl"), 'wb') as f:
+                pickle.dump(state_value, f)
+
+            with open(os.path.join(save_files_path, "snapshots.pkl"), 'wb') as f:
+                pickle.dump(snapshots, f)
 
         return activation_times, snapshots, state_value
     else:
         return None, None, None
+
+def pull_saved_pickle_file(path):
+    """
+    Pull saved pickle file from path
+    :param path: Pickle file path (saved from dict)
+    :return: Dict
+    """
+    with open(path, 'rb') as f:
+        res_dict = pickle.load(f)
+        print(f"Pickle file loaded from {path}")
+    return res_dict
+
+def _pull_saved_patient_data_files(activations_path=None, snapshots_path=None, state_values_path=None):
+    """
+    Pull saved patient data files from path in Order
+    Node Activations dict(rid: [array of activation]), # length = 83
+    Snapshots dict(rid: [{set1}, {set2}, {set3}]), # length should be #loniuid per rid
+    State Values dict(rid: [0/1, 0/1, 0/1]) # length should be #loniuid per rid
+    :param activations_path:
+    :param snapshots_path:
+    :param state_values_path:
+    :return: dict(activation_times), dict(snapshots), dict(state_values)
+    """
+    activations, snapshots, state_values = None, None, None
+
+    if activations_path is not None:
+        activations = pull_saved_pickle_file(activations_path)
+    if snapshots_path is not None:
+        snapshots = pull_saved_pickle_file(snapshots_path)
+    if state_values_path is not None:
+        state_values = pull_saved_pickle_file(state_values_path)
+
+    return activations, snapshots, state_values
 
 ### FOR GRAPH DF's
 
@@ -287,7 +340,7 @@ def node_df_from_graph(graph:nx.Graph) -> pd.DataFrame:
     """
     return  pd.DataFrame.from_dict(dict(graph.nodes(data = True)), orient = 'index')
 
-def edge_df_from_graph(graph:pd.DataFrame) -> pd.DataFrame:
+def edge_df_from_graph(graph:nx.Graph) -> pd.DataFrame:
     """
     Return a pandas data frame with edge details
     :param graph: nx.Graph from dkatlas
@@ -302,35 +355,32 @@ def edge_df_from_graph(graph:pd.DataFrame) -> pd.DataFrame:
         graph_edge_df = pd.concat([graph_edge_df[['source', 'target']], attr_df], axis = 1)
     return graph_edge_df
 
-def determine_geom_ngeom_edges(edge_df: pd.DataFrame, base_method:bool=True) -> list:
+def determine_geom_ngeom_edges(edge_df: pd.DataFrame, fiber_max_geom_length:int=50, base_method:bool=True, ) -> list:
     """
     Return a list compatible for [(u1, v1, w1), (u2, v2, w2), ...] for graph.add_weighted_edges_from but for geometric
     and non_geometric edge classification
     :param edge_df: Edge Details data from utils.edge_df_from_graph
+    :param fiber_max_geom_length: Max distance to be classified as geometric distance
     :param base_method: Bool specifying to use Fiber_mean_length>{value} to determine geom/ngeom
     :return: [(u1, v1, w1), (u2, v2, w2), ...] for graph.add_weighted_edges_from
     """
     edge_df_ = edge_df.copy()
     edge_df_.loc[:, 'geom_type'] = edge_df_['fiber_length_mean'].apply(
-        lambda fiber_length: "geometric" if fiber_length > 50 else "non_geometric")
+        lambda fiber_length: "geometric" if fiber_length < fiber_max_geom_length else "non_geometric")
     geom_ngeom_edges = [(row.source, row.target, row.geom_type) for row in edge_df_.itertuples()]
     return geom_ngeom_edges
 
 ## FOR GRAPH VISUALIZATION
 
-def export_graphml_with_namespace(G, output_path, xmlns_path=None):
+def export_graphml_with_namespace(graph: nx.Graph, output_path:str, xmlns_path:str=None):
     """
     Exports a NetworkX graph to GraphML with proper Gephi-compatible headers.
-
-    Parameters
-    ----------
-    G : networkx.Graph
-        The graph to export.
-    output_path : str
-        Path to save the GraphML file.
-    xmlns_path : str, optional
+    :param graph : networkx.Graph to export.
+    :param output_path : Path to save the files relative to $BASE$ Directory
+    :param xmlns_path : str, optional
     """
-    nx.write_graphml(G, output_path)
+    output_path = os.path.abspath(os.path.join(BASE_DIR, output_path))
+    nx.write_graphml(graph, output_path)
 
     # Patch the <graphml> header and include schema info if provided
     with open(output_path, "r", encoding="utf-8") as f:
@@ -347,4 +397,4 @@ def export_graphml_with_namespace(G, output_path, xmlns_path=None):
     with open(output_path, "w", encoding="utf-8") as f:
         f.write(content)
 
-    print(f"GraphML exported to: {output_path}")
+    print(f"GraphML exported to: {os.path.join(BASE_DIR, output_path)}")
