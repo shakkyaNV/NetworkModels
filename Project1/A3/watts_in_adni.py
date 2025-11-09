@@ -7,3 +7,9 @@ MODULE_DIR = os.path.abspath(__file__)
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(MODULE_DIR)))
 RESOURCES_DIR = os.path.join(BASE_DIR, 'resources')
 
+# load pickle files (activations, snapshots, state_values)
+# check if order preserved
+
+# Create base graph (once) from pickle or from dkatlas
+
+# propagate
