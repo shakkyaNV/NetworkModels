@@ -1,5 +1,7 @@
 import os, sys
+from math import inf
 import pickle
+from collections import defaultdict
 
 import networkx as nx
 import numpy as np, pandas as pd
@@ -179,10 +181,11 @@ NODE_FSREGION_TO_ID = {'rh_lateralorbitofrontal': 1,
 
 ## FOR ADNI PATIENT DATA FILES
 
-def df_rename_to_fsnames(df_path):
+def df_rename_to_fsnames(df_path:str, query_filter=None):
     """
     Return the fsnames renamed ADNI data file
     :param df_path: Relative path from BASE directory (../NetworkModels/)
+    :param query_filter: Query string for df.query(query) to filter for testing
     :return: pd.DataFrame
     """
     df = pd.read_csv(os.path.join(BASE_DIR, df_path))
@@ -194,7 +197,18 @@ def df_rename_to_fsnames(df_path):
     # ## IF you can't find a .csv with ("_suvr" subbed to "_mappig") go with utilsa3_dict
     map_dict = DK_FSNAMES_MAPPING_DICT
     df.rename(columns=map_dict, inplace=True)
-    return df
+
+    if not query_filter:
+        return df
+
+    try:
+        subset = df.query(query_filter)
+    except Exception as e:
+        print(f"Error in running Query filter. Returning unfiltered Dataset:"
+              f"Query: {query_filter}, "
+              f"Error: {e}")
+    else:
+        return subset
 
 def safe_filter_df(df:pd.DataFrame, filter_all:bool=True):
     """
@@ -207,6 +221,7 @@ def safe_filter_df(df:pd.DataFrame, filter_all:bool=True):
     if filter_all:
         df_new = df.loc[(df['qc_flag'] >= 0) & (df['tracer'].isin(['FBP', 'FBB']))] #make sure to use .loc/.iloc or copy
         df_new = df_new.drop_duplicates(subset = 'loniuid', keep='first')               # Base remove duplicate entries based on loniuid
+        df_new = df_new.dropna(how = 'any') # drop any column that has NA
         return df_new
     else:
         return df
@@ -281,7 +296,7 @@ def activation_times_of_patients_for_cortical_regions_df(df:pd.DataFrame, featur
             save_files_path = os.path.abspath(os.path.join(BASE_DIR, save_files_path))
             # MAPPING FILE TO SEE IF THE PICKLE FILE RETAINED ORDER (and for pytest)
             df_rid_loniuid = df[['rid', 'loniuid', 'scandate']]
-            df_rid_loniuid.to_csv(os.path.join(save_files_path, "df_rid_lonuid.cv"), index = False)
+            df_rid_loniuid.to_csv(os.path.join(save_files_path, "df_rid_lonuid.csv"), index = False)
 
             # Save other files to PICKLE
             with open(os.path.join(save_files_path, "activation_times.pkl"), 'wb') as f:
@@ -372,6 +387,33 @@ def determine_geom_ngeom_edges(edge_df: pd.DataFrame, fiber_max_geom_length:int=
 
 ## FOR GRAPH VISUALIZATION
 
+
+def remove_properties(graph: nx.Graph, node_properties_to_remove:list=None, edge_properties_to_remove:list=None):
+    """
+    Removes specified node and edge properties from a graph.
+    (Also compatible with DK.graph)
+    :param graph: (networkx.Graph or networkx.DiGraph): The graph to modify.
+    :param node_properties_to_remove: (list): List of node properties to remove.
+    :param edge_properties_to_remove: (list): List of edge properties to remove.
+
+    Returns:
+    G (networkx.Graph or networkx.DiGraph): The modified graph.
+    """
+
+    # Remove node properties
+    if node_properties_to_remove:
+        for _, attrs in graph.nodes(data=True):
+            for key in node_properties_to_remove:
+                attrs.pop(key, None)
+
+    # Remove edge properties
+    if edge_properties_to_remove:
+        for _, _, attrs in graph.edges(data=True):
+            for key in edge_properties_to_remove:
+                attrs.pop(key, None)
+
+    return graph
+
 def export_graphml_with_namespace(graph: nx.Graph, output_path:str, xmlns_path:str=None):
     """
     Exports a NetworkX graph to GraphML with proper Gephi-compatible headers.
@@ -398,3 +440,20 @@ def export_graphml_with_namespace(graph: nx.Graph, output_path:str, xmlns_path:s
         f.write(content)
 
     print(f"GraphML exported to: {os.path.join(BASE_DIR, output_path)}")
+
+
+### FOR PERSISTENCE
+def persistence_for_graphics_to_betti_nums(persistence_for_graphics):
+    births = [b for _, (b, d) in persistence_for_graphics]
+    deaths = [d if d != inf else max(births) + 1 for _, (b, d) in persistence_for_graphics]
+    t_min = 0
+    t_max = int(np.ceil(max(deaths)))
+    counts = defaultdict(lambda: defaultdict(int))
+
+    # Iterate over each timestep
+    for t in range(t_min, t_max + 1):
+        for dim, (b, d) in persistence_for_graphics:
+            if b <= t < d or (d == inf and b <= t):
+                counts[t][dim] += 1
+
+    return counts
