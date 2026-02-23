@@ -4,7 +4,7 @@ import numpy as np
 import os
 
 
-from utils_a3 import (
+from Project1.A3.utils_a3 import (
     BASE_DIR, MODULE_DIR, RESOURCES_DIR,
     DK_FSNAMES_MAPPING_DICT, NODE_FSREGION_TO_ID,
     node_df_from_graph, edge_df_from_graph, determine_geom_ngeom_edges
@@ -84,7 +84,7 @@ class DKAtlasGraph:
                 weight_function = np.random.randint(low=1, high=20, size = self.graph.number_of_edges())
             elif weight_function == "weight1":
                 for u, v, data in self.graph.edges(data=True):
-                    data['weight1'] = data['number_of_fibers']/data['fiber_length_mean']
+                    data['weight'] = np.round(data['number_of_fibers'] /data['fiber_length_mean'])
             elif weight_function == "weight2":
                 for u, v, data in self.graph.edges(data=True):
                     data['weight2'] = data['number_of_fibers']/(data['fiber_length_mean']**2)
