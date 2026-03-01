@@ -300,4 +300,4 @@ Project1/A1/lib
 .venv/
 /initial_interview/outputs/
 Outputs/
-
+!resources/other/brain_.png
