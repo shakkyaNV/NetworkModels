@@ -82,9 +82,12 @@ class DKAtlasGraph:
 
             if weight_function is None:
                 weight_function = np.random.randint(low=1, high=20, size = self.graph.number_of_edges())
+            elif weight_function == "weight0":
+                for u, v, data in self.graph.edges(data=True):
+                    data['weight'] = data['number_of_fibgers']
             elif weight_function == "weight1":
                 for u, v, data in self.graph.edges(data=True):
-                    data['weight'] = np.round(data['number_of_fibers'] /data['fiber_length_mean'])
+                    data['weight'] = data['number_of_fibers'] /data['fiber_length_mean']
             elif weight_function == "weight2":
                 for u, v, data in self.graph.edges(data=True):
                     data['weight2'] = data['number_of_fibers']/(data['fiber_length_mean']**2)
