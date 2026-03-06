@@ -267,6 +267,7 @@ out/
 
 # mpeltonen/sbt-idea plugin
 .idea_modules/
+.idea/
 
 # JIRA plugin
 atlassian-ide-plugin.xml
@@ -284,7 +285,7 @@ crashlytics.properties
 crashlytics-build.properties
 fabric.properties
 
-## ------- Jupyter Notebook stuff
+## ------- Jupyter Notebook stuffbash
 **/.ipynb_checkpoints/
 .pytest_cache/
 .virtual_documents/
