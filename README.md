@@ -63,7 +63,7 @@ This project investigates whether heterogeneity can be explained through perturb
 
 ---
 
-## 🔬 Network Modeling Framework
+## Network Modeling Framework
 
 ### Propagation Models
 
