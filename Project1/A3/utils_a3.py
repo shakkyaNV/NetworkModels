@@ -181,9 +181,10 @@ NODE_FSREGION_TO_ID = {'rh_lateralorbitofrontal': 1,
 
 ## FOR ADNI PATIENT DATA FILES
 
-def df_rename_to_fsnames(df_path:str, query_filter=None):
+def df_rename_to_fsnames(df_path:str, query_filter=None, type_filter:str="amyloid"):
     """
     Return the fsnames renamed ADNI data file
+    :param type_filter: Indicating whether it's for amyloid or tau
     :param df_path: Relative path from BASE directory (../NetworkModels/)
     :param query_filter: Query string for df.query(query) to filter for testing
     :return: pd.DataFrame
@@ -210,41 +211,53 @@ def df_rename_to_fsnames(df_path:str, query_filter=None):
     else:
         return subset
 
-def safe_filter_df(df:pd.DataFrame, filter_all:bool=True):
+def safe_filter_df(df:pd.DataFrame, filter_all:bool=True, type_filter:str="amyloid"):
     """
     Filter all non-safe entries from the ADNI data frame.
     Eg: Remove qc_flag <= 0, any patients that use NAV tracer, {to be implemented, any patient that use many tracers}
+    :param type_filter: Indicator for amyloid or tau
     :param df: ADNI dataset renamed accordingly
     :param filter_all: Bool specifying to filter all non-safe entries. {False, return the as is dataset}
     :return: pd.DataFrame
     """
+    tracer_list = []
+    if type_filter == "amyloid":
+        tracer_list = ['FBP', 'FBB']
+    elif type_filter == "tau":
+        tracer_list = ['FTP']
+
     if filter_all:
-        df_new = df.loc[(df['qc_flag'] >= 0) & (df['tracer'].isin(['FBP', 'FBB']))] #make sure to use .loc/.iloc or copy
+        df_new = df.loc[(df['qc_flag'] >= 0) & (df['tracer'].isin(tracer_list))] #make sure to use .loc/.iloc or copy
         df_new = df_new.drop_duplicates(subset = 'loniuid', keep='first')               # Base remove duplicate entries based on loniuid
         df_new = df_new.dropna(how = 'any') # drop any column that has NA
         return df_new
     else:
         return df
 
-def activations_cortical_regions_df(df:pd.DataFrame, base_setup:bool=True):
+def activations_cortical_regions_df(df:pd.DataFrame, base_setup:bool=True, tracer_dictionary: dict=None):
     """
     Apply base thresholding [Based on whole cerebellum referencing, should not be used for coritical regions (but we're
     going to use it anyway), should not be used to compare across tracer (but we're going to use it anyway)]
     :param df: ADNI dataset renamed accordingly (filtered or unfiltered) {to be implemented, not checking for NAV for the moment}
     :param base_setup: Bool specifiying to apply base thresholding. Also assume it went through utils.safe_filter_df {False, return the as is dataset}
+    :param tracer_dictionary: Dictionary of tracer names as keys and lists of tracer names as values, Old values for tracers will be superseded if the same tracer name is provided
     :return: pd.DataFrame with tracer_threshold column specifying tracer tresholds {against better judgement}, and suvr values turned to 1/0 values
     """
+    multipliers = {"FBP": 1.11, "FBB": 1.08, "FTP": 1.27, "MK6240":1.27, "PI2620": 1.27}
+    if tracer_dictionary:
+        multipliers = {**multipliers, **tracer_dictionary}
+
     if base_setup:
-        tracer_threshold = 'tracer_threshold'
-        df.loc[:, tracer_threshold] = df['tracer'].apply(lambda x: 1.11 if x == "FBP" else 1.08)
+        df.loc[:, 'tracer_threshold'] = df['tracer'].apply(lambda x: multipliers.get(x, 1.0))
         for col in DK_FSNAMES_MAPPING_DICT.values():
-            df.loc[:, f'{col}_positivity'] = df.apply(lambda row: 1 if row[col] > row[tracer_threshold] else 0, axis=1)
+            df.loc[:, f'{col}_positivity'] = df.apply(lambda row: 1 if row[col] > row['tracer_threshold'] else 0, axis=1)
         positivity_indicator_columns = [col for col in df.columns if col.endswith("_positivity")]
         return df, positivity_indicator_columns
     else:
         return df, DK_FSNAMES_MAPPING_DICT.values()
 
-def activation_times_of_patients_for_cortical_regions_df(df:pd.DataFrame, feature_cols:list, base_setup:bool=True, save_files:bool=False, save_files_path:str=None):
+def activation_times_of_patients_for_cortical_regions_df(df:pd.DataFrame, feature_cols:list, base_setup:bool=True, save_files:bool=False, save_files_path:str=None,
+                                                         type_filter:str="amyloid"):
     """
     Returns dict of activation times and snapshots of activation per patient
     :param df: DataFrame
@@ -252,8 +265,14 @@ def activation_times_of_patients_for_cortical_regions_df(df:pd.DataFrame, featur
     :param base_setup: Bool specificying that dataset went through utils.safe_filter_df and utils.activations_cortical_regions_df
     :param save_files: Bool specifying whether to save files to disk (format pickle)
     :param save_files_path: Directory (folder only) specifying path to save files to disk, relative to Base_Dir: os.path.join(utils.BASE_DIr, <path>)
+    :param type_filter: Indicator for amyloid or tau
     :return: dict of activations and dict of snapshots
     """
+    if type_filter.lower() == "amyloid":
+        state_value_col = 'amyloid_status'
+    elif type_filter.lower() == "tau":
+        state_value_col = 'summary_diagnosis'
+
     if base_setup:
         assert [col.removesuffix("_positivity") for col in df.columns if col.endswith("positivity")] == list(
             NODE_FSREGION_TO_ID.keys())
@@ -271,6 +290,9 @@ def activation_times_of_patients_for_cortical_regions_df(df:pd.DataFrame, featur
             n_rows, n_cols = matrix.shape
             cumulative_set = set()
             group_sets = []
+
+            # here we are trying to map at which Nth time step (n_row of patient data), the specic region lits up.
+            # so we start with setting everything to -1, and if it gets lit up in the first scan we note those cols as 0
             active_t = np.full(n_cols, -1)      ##### Check with watts_model and test_WTM (0 or -1 -> check GP.persistence)
 
             for i in range(n_rows):
@@ -290,7 +312,14 @@ def activation_times_of_patients_for_cortical_regions_df(df:pd.DataFrame, featur
             activation_times[group_key[0]] = active_t
 
             # We'll take the overall amyloid positivity (with whole cerebellum ref) as state value
-            state_value[group_key[0]] = group_df['amyloid_status'].values
+            state_value[group_key[0]] = group_df[state_value_col].values
+
+            # we'll remove any entries that don't have any activations throughout it's scans
+            if np.nanmax(activation_times[group_key[0]]) < 0:
+                print(f"Removing RID Patient Data {group_key[0]} as they have single record with no activations or TODO")
+                activation_times.pop(group_key[0], None)
+                state_value.pop(group_key[0], None)
+                snapshots.pop(group_key[0], None)
 
         if save_files:
             save_files_path = os.path.abspath(os.path.join(BASE_DIR, save_files_path))

@@ -98,7 +98,7 @@ map_result_df %<>%
 
 
 ### Save the files to New folder
-new_folder_name = new_folder_name = paste0("structured_files_", 
+new_folder_name = new_folder_name = paste0("NEWWWW_structured_files_", 
 												df_base_path %>% basename() %>% tools::file_path_sans_ext())
 
 structure_file_path = df_path %>% 
@@ -109,11 +109,14 @@ dir.create(structure_file_path, recursive = F, showWarnings = T)
 
 # Capture column structure difference between new/old file types
 if (file_structure == "adni") {
-  cols_to_keep <- str_to_lower(c("LONIUID", "PTID", "RID", "SCANDATE", "QC_FLAG", "TRACER", "AMYLOID_STATUS", 
-  								 "AMYLOID_STATUS_COMPOSITE_REF", "CENTILOIDS", "SUMMARY_SUVR", "SUMMARY_VOLUME", 
-								 "WHOLECEREBELLUM_SUVR", "WHOLECEREBELLUM_VOLUME", "COMPOSITE_REF_SUVR", "COMPOSITE_REF_VOLUME", 
-								 "CEREBELLUM_CORTEX_SUVR",	"CEREBELLUM_CORTEX_VOLUME",	"ERODED_SUBCORTICALWM_SUVR",	"ERODED_SUBCORTICALWM_VOLUME")
-								)
+  cols_to_keep <- str_to_lower(c("LONIUID", "PTID", "RID", "SCANDATE", "QC_FLAG", "TRACER", 
+  								"SUMMARY_DIAGNOSIS", "DIAGNOSIS"
+							)) 
+#                                  "AMYLOID_STATUS", "AMYLOID_STATUS_COMPOSITE_REF", "CENTILOIDS", "SUMMARY_SUVR", "SUMMARY_VOLUME", 
+# 								 "WHOLECEREBELLUM_SUVR", "WHOLECEREBELLUM_VOLUME", "COMPOSITE_REF_SUVR", "COMPOSITE_REF_VOLUME", 
+# 								 "CEREBELLUM_CORTEX_SUVR",	"CEREBELLUM_CORTEX_VOLUME",	"ERODED_SUBCORTICALWM_SUVR",	"ERODED_SUBCORTICALWM_VOLUME"
+# 								 )
+# 								)
 } else {
   cols_to_keep <- str_to_lower(c("RID"))
 }

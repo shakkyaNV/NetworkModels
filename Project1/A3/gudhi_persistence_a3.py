@@ -43,9 +43,9 @@ def compute_persistence(
             persistence[t, d] = []
 
     # persistence_for_graphics = []  ## gudhi tools requires a special format for diagrams
+    tree = gd.simplex_tree.SimplexTree(None)
     for t in range(np.nanmax(activation_times) + 1):
         # print(f"---------- Filtration Time Step: {t} ------------")
-        tree = gd.simplex_tree.SimplexTree(None)
         tree.make_filtration_non_decreasing()
         # tree.initialize_filtration()
 

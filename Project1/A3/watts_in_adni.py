@@ -1,4 +1,4 @@
-import networkx as nx, numpy as np, pandas as pd
+import networkx as nx, numpy as np, pandas as pd  # type: ignore # type: ignore
 from collections import defaultdict; from itertools import combinations
 import os, sys
 
@@ -81,17 +81,21 @@ def main_sims(params: dict, adni_data_file_path:str, graph_file_path:str, np_glo
               save_files=False, ouput_file:str="ADNI_GPC"):
     np.random.seed(np_global_seed)
     query_filter = params.get("query_filter", None)
+    type_filter = params.get("type_filter", "amyloid")
 
+    # load dkatlas-connectome
     graph = nx.read_graphml(os.path.join(utils.BASE_DIR, graph_file_path))
     nx.relabel_nodes(graph, lambda x: int(x), copy=False)
 
-    df = utils.df_rename_to_fsnames(adni_data_file_path, query_filter=query_filter)
-    df = utils.safe_filter_df(df, True)
+    df = utils.df_rename_to_fsnames(adni_data_file_path, query_filter=query_filter, type_filter=type_filter)
+    df = utils.safe_filter_df(df, True, type_filter=type_filter)
     df.sort_values(by=['rid', 'scandate'], inplace=True)
     df, feature_cols = utils.activations_cortical_regions_df(df, True)
     (activation_times,
      snapshots,
-     state_values) = utils.activation_times_of_patients_for_cortical_regions_df(df,feature_cols,True)
+     state_values) = utils.activation_times_of_patients_for_cortical_regions_df(df,feature_cols,True, type_filter=type_filter)
+    print(f"Dataset proceeds with shape: {df.shape}")
+
 
     base_dfs = []
     for rid in activation_times.keys():
