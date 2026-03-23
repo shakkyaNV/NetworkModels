@@ -487,3 +487,63 @@ def persistence_for_graphics_to_betti_nums(persistence_for_graphics):
                 counts[t][dim] += 1
 
     return counts
+
+# MERING diagnostics from DXSUM_{} to AMY_{}
+def merge_nearest_date(left_df, right_df, on="RID", left_date="SCANDATE", right_date="EXAMDATE"):
+    """
+    Merge two DataFrames by exact RID match, then nearest date.
+    The left_df's SCANDATE is treated as the reference (correct) date.
+    """
+    # Ensure date columns are datetime
+    left_df = left_df.copy()
+    right_df = right_df.copy()
+    left_df[left_date] = pd.to_datetime(left_df[left_date])
+    right_df[right_date] = pd.to_datetime(right_df[right_date])
+
+    merged_rows = []
+
+    for rid, left_group in left_df.groupby(on):
+        right_group = right_df[right_df[on] == rid]
+
+        if right_group.empty:
+            # No match in right_df for this RID — include with NaNs
+            for _, lrow in left_group.iterrows():
+                merged_rows.append(lrow.to_dict())
+            continue
+
+        for _, lrow in left_group.iterrows():
+            scan_date = lrow[left_date]
+
+            # Find the closest EXAMDATE to this SCANDATE
+            time_diffs = (right_group[right_date] - scan_date).abs()
+            closest_idx = time_diffs.idxmin()
+            rrow = right_group.loc[closest_idx]
+
+            # Merge the row, suffixing duplicate columns
+            combined = lrow.to_dict()
+            for col, val in rrow.items():
+                if col == on:
+                    continue  # skip duplicate RID
+                elif col in combined:
+                    combined[f"{col}_right"] = val  # suffix conflict
+                else:
+                    combined[col] = val
+
+            merged_rows.append(combined)
+
+    result = pd.DataFrame(merged_rows).reset_index(drop=True)
+    return result
+
+
+# --- Example usage ---
+left_df = pd.DataFrame({
+    "RID":      [1,    1,    2,    3],
+    "SCANDATE": ["2020-01-10", "2020-06-15", "2021-03-01", "2019-11-20"],
+    "score":    [88,   92,   75,   60]
+})
+
+right_df = pd.DataFrame({
+    "RID":      [1,    1,    2,    2],
+    "EXAMDATE": ["2020-01-08", "2020-06-20", "2021-02-28", "2021-04-01"],
+    "result":   ["A",  "B",  "C",  "D"]
+})
