@@ -2,6 +2,7 @@
 library(tidyverse, quietly = TRUE)
 library(igraph)
 require(assertthat)
+require(magrittr)
 
 # Files
 cat("Choose the csv file/n")
@@ -118,7 +119,7 @@ if (file_structure == "adni") {
 # 								 )
 # 								)
 } else {
-  cols_to_keep <- str_to_lower(c("RID"))
+  cols_to_keep <- str_to_lower(c("RID", "EXAMDATE", ""))
 }
 
 ### 
