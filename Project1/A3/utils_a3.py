@@ -493,6 +493,13 @@ def merge_nearest_date(left_df, right_df, on="RID", left_date="SCANDATE", right_
     """
     Merge two DataFrames by exact RID match, then nearest date.
     The left_df's SCANDATE is treated as the reference (correct) date.
+    ### Example usecase
+    # base_path = utils.BASE_DIR
+    # amy_df = pd.read_csv(os.path.join(base_path, "resources/adni_pet_image_analysis/AMY/structured_files_UCBERKELEY_AMY_6MM_29Oct2025/UCBERKELEY_AMY_6MM_29Oct2025_suvr.csv"))
+    # dxdum = pd.read_csv(os.path.join(base_path, "resources/adni_pet_image_analysis/DXSUM_07Mar2026.csv"))
+    # temp_df = merge_nearest_date(amy_df, dxdum, on = 'RID', left_date = 'SCANDATE', right_date = 'EXAMDATE')
+    # temp_df['DATE_DIFF'] = (temp_df['SCANDATE'] - temp_df['EXAMDATE']).abs()
+    # temp_df.to_csv(os.path.join(base_path, "resources", "adni_pet_image_analysis", "AMY", "Diagnostics_merged_amy_6mm.csv"), index=False)
     """
     # Ensure date columns are datetime
     left_df = left_df.copy()
@@ -534,16 +541,3 @@ def merge_nearest_date(left_df, right_df, on="RID", left_date="SCANDATE", right_
     result = pd.DataFrame(merged_rows).reset_index(drop=True)
     return result
 
-
-# --- Example usage ---
-left_df = pd.DataFrame({
-    "RID":      [1,    1,    2,    3],
-    "SCANDATE": ["2020-01-10", "2020-06-15", "2021-03-01", "2019-11-20"],
-    "score":    [88,   92,   75,   60]
-})
-
-right_df = pd.DataFrame({
-    "RID":      [1,    1,    2,    2],
-    "EXAMDATE": ["2020-01-08", "2020-06-20", "2021-02-28", "2021-04-01"],
-    "result":   ["A",  "B",  "C",  "D"]
-})
