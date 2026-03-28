@@ -271,9 +271,10 @@ def activation_times_of_patients_for_cortical_regions_df(df:pd.DataFrame, featur
     if type_filter.lower() == "amyloid":
         state_value_col = 'amyloid_status'
     elif type_filter.lower() == "tau":
-        state_value_col = 'summary_diagnosis'
+        state_value_col = 'summary_diagnosis_MCI'
 
     if base_setup:
+        print(df.shape)
         assert [col.removesuffix("_positivity") for col in df.columns if col.endswith("positivity")] == list(
             NODE_FSREGION_TO_ID.keys())
 
